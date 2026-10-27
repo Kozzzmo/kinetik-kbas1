@@ -97,6 +97,84 @@ int main()
         }
         check(at >= 96000 - 512 && at <= 96000 + 512, "queued pattern starts when the pattern (16 steps) ends");
     }
+    // locks: step 1 locked to a closed filter, step 5 plain; brightness = share of the high band
+    {
+        auto hf = [](const std::vector<float>& x, int a, int b) { double h = 0, t = 0; float prev = 0; for (int i = a; i < b; ++i) { const float d = x[i] - prev; prev = x[i]; h += d * d; t += x[i] * x[i]; } return h / std::max(t, 1e-12); };
+        auto lk = render([](Engine& e) { Pattern& P = e.bank.patterns[0]; P.on[0] = 1; P.on[4] = 1; P.note[0] = P.note[4] = 45; e.param[pCUTOFF] = 100; e.param[pENVMOD] = 0; P.locks[0][pCUTOFF] = 10; }, 30000);
+        const double a = hf(lk, 300, 3000), b = hf(lk, 24300, 27000);
+        std::snprintf(m, sizeof(m), "a CUTOFF lock darkens its step only (%.4f vs %.4f)", a, b);
+        check(a < b * 0.3, m);
+        auto dm = render([](Engine& e) { Pattern& P = e.bank.patterns[0]; P.on[0] = 1; P.note[0] = 45; P.locks[0][pDLYMIX] = 127; e.param[pDLYMIX] = 0; e.param[pDLYTIME] = 88; }, 40000);
+        check(rms(dm, 12000, 16000) > 1e-3, "a DELAY MIX lock sends that step into the echo");
+    }
+    // chain: A02 once then A03 twice, looped
+    {
+        std::unique_ptr<Engine> e(new Engine()); e->init(sr); e->param[pPLAY] = 1.f;
+        e->bank.chain.parse("1 2 1:1 2:2", kPatterns);
+        std::vector<float> L(256), R(256); std::vector<int> seq;
+        for (int p = 0; p < 96000 * 7; p += 256) {
+            e->process(L.data(), R.data(), 256, Transport(), nullptr, 0);
+            if (seq.empty() || seq.back() != e->outPattern) seq.push_back(e->outPattern);
+        }
+        check(seq.size() >= 4 && seq[0] == 1 && seq[1] == 2 && seq[2] == 1 && seq[3] == 2, "CHAIN plays its patterns in order and loops");
+    }
+    // probability, ratchets, ties
+    {
+        Engine* E = nullptr;
+        render([](Engine& e) { Pattern& P = e.bank.patterns[0]; P.on[0] = 1; P.prob[0] = 0; }, 6000, {}, &E);
+        check(E->trigCount == 0, "probability 0 %: the step does not play");
+        render([](Engine& e) { Pattern& P = e.bank.patterns[0]; P.on[0] = 1; P.ratchet[0] = 3; }, 6000, {}, &E);
+        check(E->trigCount == 3, "ratchet 3: three notes in the step");
+        auto t = render([](Engine& e) { Pattern& P = e.bank.patterns[0]; P.on[0] = 1; P.tie[1] = 1; P.tie[2] = 1; }, 18000, {}, &E);
+        check(E->trigCount == 1 && rms(t, 15000, 16500) > rms(t, 1000, 2500) * 0.05, "TIE: one note held over three steps");
+    }
+    // polymetric accent row: 3 steps long, accent on its first step = steps 1, 4, 7, 10...
+    {
+        auto pk = [](const std::vector<float>& x, int a, int b) { float m = 0; for (int i = a; i < b; ++i) m = std::max(m, std::fabs(x[i])); return m; };
+        auto x = render([](Engine& e) { Pattern& P = e.bank.patterns[0]; for (int i = 0; i < 16; ++i) { P.on[i] = 1; P.note[i] = 45; } P.accent[0] = 1; P.accLen = 3; e.param[pACCENT] = 127; }, 6000 * 8);
+        const float s1 = pk(x, 0, 3000), s2 = pk(x, 6000, 9000), s4 = pk(x, 18000, 21000), s5 = pk(x, 24000, 27000);
+        check(s1 > s2 * 1.15f && s4 > s5 * 1.15f, "accent row of 3 steps: accents on steps 1, 4, 7...");
+    }
+    // EVOLVE: the line changes each loop, in the scale; EVO RESET brings it back
+    {
+        std::unique_ptr<Engine> e(new Engine()); e->init(sr); e->param[pPLAY] = 1.f; e->param[pEVOLVE] = 127.f;
+        Pattern& P = e->bank.patterns[0]; for (int i = 0; i < 16; ++i) { P.on[i] = 1; P.note[i] = (uint8_t)(36 + (i % 4) * 3); }
+        e->bank.glob.scale = 1; e->bank.glob.root = 0;
+        for (int i = 0; i < 16; ++i) if (!inScale(P.note[i], 0, 1)) P.note[i] = 36;
+        std::vector<float> L(256), R(256);
+        for (int p = 0; p < 96000 * 4 + 1000; p += 256) e->process(L.data(), R.data(), 256, Transport(), nullptr, 0);
+        const Pattern& Q = e->playingPattern(); int changed = 0; bool inKey = true;
+        for (int i = 0; i < 16; ++i) { if (Q.note[i] != P.note[i] || Q.on[i] != P.on[i] || Q.accent[i] != P.accent[i]) ++changed; if (Q.on[i] && !inScale(Q.note[i], 0, 1)) inKey = false; }
+        check(changed >= 3 && inKey, "EVOLVE: after 4 loops the line has changed, still in the scale");
+        e->param[pEVORESET] = 30.f;    // every 2 loops
+        for (int p = 0; p < 96000 * 2; p += 256) e->process(L.data(), R.data(), 256, Transport(), nullptr, 0);
+        bool same = true; const Pattern& Q2 = e->playingPattern();
+        for (int i = 0; i < 16; ++i) if (Q2.note[i] != P.note[i] || Q2.on[i] != P.on[i]) same = false;
+        check(same, "EVO RESET: back to the written line every 2 loops");
+    }
+    // colour: PUMP, SUB, GROWL, VOWEL, HARMONY, R TIME
+    {
+        auto base = [](Engine& e) { Pattern& P = e.bank.patterns[0]; for (int i = 0; i < 16; ++i) { P.on[i] = 1; P.note[i] = 45; P.slide[i] = 1; } e.param[pAMPDEC] = 127; };
+        auto plain = render(base, 24000);
+        auto pump = render([&](Engine& e) { base(e); e.param[pPUMP] = 127; }, 24000);
+        check(rms(pump, 200, 2000) < rms(pump, 14000, 20000) * 0.5, "PUMP: ducked at the beat, back up after");
+        bool fin = true; int differ = 0;
+        for (int pp : {pSUB, pGROWL, pVOWEL, pHARMONY}) {
+            auto y = render([&](Engine& e) { base(e); e.param[pp] = pp == pHARMONY ? 75.f : 110.f; }, 24000);
+            for (float v : y) if (!std::isfinite(v) || std::fabs(v) > 1.2f) fin = false;
+            double d = 0; for (int i = 0; i < 24000; ++i) d += (y[i] - plain[i]) * (y[i] - plain[i]);
+            if (std::sqrt(d / 24000) > 0.01) ++differ;
+        }
+        check(fin && differ == 4, "SUB, GROWL, VOWEL and HARMONY change the sound, finite");
+        Engine* E = nullptr;
+        std::unique_ptr<Engine> e(new Engine()); e->init(sr); e->param[pPLAY] = 1.f; e->param[pDLYMIX] = 127; e->param[pDLYTIME] = 88; e->param[pDLYTIMER] = 40;
+        e->bank.patterns[0].on[0] = 1; e->bank.patterns[0].note[0] = 45;
+        std::vector<float> L(48000), R(48000);
+        for (int p = 0; p < 48000; p += 256) e->process(L.data() + p, R.data() + p, std::min(256, 48000 - p), Transport(), nullptr, 0);
+        (void)E;
+        double dl = 0, dr = 0; for (int i = 0; i < 48000; ++i) { dl += L[i] * L[i]; dr += R[i] * R[i]; }
+        check(std::fabs(dl - dr) > 0.05 * std::max(dl, dr), "R TIME: the right echo has its own time");
+    }
     std::printf(fails ? "%d failures\n" : "all passed\n", fails);
     return fails ? 1 : 0;
 }

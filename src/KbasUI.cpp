@@ -32,8 +32,8 @@ struct R {
     float cy() const { return y + h * 0.5f; }
 };
 
-enum DragKind { dkNone, dkKnob, dkTempo, dkPatLen, dkSwing, dkNote, dkPaint, dkResize };
-enum Overlay { ovNone, ovPresets, ovSkins, ovSave, ovLicense, ovUpdate };
+enum DragKind { dkNone, dkKnob, dkTempo, dkPatLen, dkSwing, dkNote, dkPaint, dkPaintTie, dkProb, dkRowLen, dkResize };
+enum Overlay { ovNone, ovPresets, ovSkins, ovSave, ovLicense, ovUpdate, ovChain, ovRandom };
 
 class KbasUI : public UI
 {
@@ -194,9 +194,10 @@ protected:
     }
     Color accentInk() const { return th->logo == lgRiso ? th->text : th->accent; }
     Color onColor() const { return th->logo == lgNeon ? Color(236, 36, 50) : th->accent; }   // lit steps (NEON red, as KDSP-16)
-    void drawKnob(const R& r, float v01, const char* name, const std::string& val, bool locked, bool highlight)
+    void drawKnob(const R& r, float v01, const char* name, const std::string& val, bool locked, bool highlight,
+                  float rad = 26.f, float cyo = 44.f, float ny = 88.f, float vy = 106.f)
     {
-        const float cx = r.cx(), cy = r.y + 44.f, rad = 26.f;
+        const float cx = r.cx(), cy = r.y + cyo;
         const float a0 = kPi * 0.75f, a1 = kPi * 2.25f;
         v01 = clampf(v01, 0.f, 1.f);
         const Color hi = locked ? th->lock : th->knobArc;
@@ -233,8 +234,8 @@ protected:
             break;
         }
         }
-        label(cx, r.y + 88.f, name, 12.f, locked ? th->lock : th->text);
-        number(cx, r.y + 106.f, val.c_str(), 14.f, locked ? th->lock : (th->fontNum == fnSans ? th->dim : th->text));
+        label(cx, r.y + ny, name, rad < 25.f ? 11.f : 12.f, locked ? th->lock : th->text);
+        number(cx, r.y + vy, val.c_str(), rad < 25.f ? 13.f : 14.f, locked ? th->lock : (th->fontNum == fnSans ? th->dim : th->text));
     }
     void drawLogo()
     {
@@ -286,6 +287,8 @@ protected:
         setState("cmd", c.c_str());
     }
     void sendPatternSettings() { char b[48]; std::snprintf(b, sizeof(b), "P %d %d %d", editPattern(), pat().length, pat().swing); sendCmd(b); }
+    void sendMore(int s) { char b[64]; std::snprintf(b, sizeof(b), "y %d %d %d %d %d", editPattern(), s, pat().prob[s], pat().ratchet[s], pat().tie[s]); sendCmd(b); }
+    void sendRows() { char b[48]; std::snprintf(b, sizeof(b), "R %d %d %d", editPattern(), pat().accLen, pat().slideLen); sendCmd(b); repaint(); }
     void sendGlob() { char b[48]; std::snprintf(b, sizeof(b), "G %d %d %d", bank->glob.scale, bank->glob.root, bank->glob.transpose); sendCmd(b); }
     void sendStep(int s)
     {
@@ -306,19 +309,23 @@ protected:
     R vKnob(int k) const { return {316.f + k * 105.f, 82.f, 100.f, 120.f}; }        // voice: 8 knobs
     R fKnob(int k) const { return {22.f + k * 98.f, 256.f, 96.f, 120.f}; }          // amp + effects: 7 knobs
     R patBtn(int i) const { return {734.f + (i % 8) * 53.f, 274.f + (i / 8) * 36.f, 48.f, 30.f}; }
-    R patCopy() const { return {734.f, 348.f, 136.f, 28.f}; }
-    R patPaste() const { return {876.f, 348.f, 136.f, 28.f}; }
-    R patClear() const { return {1018.f, 348.f, 136.f, 28.f}; }
+    R patCopy() const { return {734.f, 348.f, 100.f, 28.f}; }
+    R patPaste() const { return {840.f, 348.f, 100.f, 28.f}; }
+    R patClear() const { return {946.f, 348.f, 100.f, 28.f}; }
+    R chainBtn() const { return {1052.f, 348.f, 102.f, 28.f}; }
+    R lockClearBtn() const { return {182.f, 196.f, 110.f, 22.f}; }
     // sequencer
     R pageBtn(int i) const { return {24.f + i * 68.f, 406.f, 64.f, 26.f}; }
     R rotL() const { return {166.f, 406.f, 28.f, 26.f}; }
     R rotR() const { return {196.f, 406.f, 28.f, 26.f}; }
     R acidBtn() const { return {232.f, 406.f, 104.f, 26.f}; }
-    R scaleBtn() const { return {342.f, 406.f, 150.f, 26.f}; }
-    R rootBtn() const { return {496.f, 406.f, 64.f, 26.f}; }
-    R snapBtn() const { return {564.f, 406.f, 70.f, 26.f}; }
-    R transBtn() const { return {638.f, 406.f, 124.f, 26.f}; }
-    R undoBtn() const { return {770.f, 406.f, 116.f, 26.f}; }
+    R scaleBtn() const { return {342.f, 406.f, 118.f, 26.f}; }
+    R rootBtn() const { return {464.f, 406.f, 62.f, 26.f}; }
+    R snapBtn() const { return {530.f, 406.f, 56.f, 26.f}; }
+    R transBtn() const { return {590.f, 406.f, 118.f, 26.f}; }
+    R rndBtn() const { return {712.f, 406.f, 84.f, 26.f}; }
+    R rndMenu(int i) const { return {712.f, 436.f + i * 34.f, 200.f, 32.f}; }
+    R undoBtn() const { return {800.f, 406.f, 86.f, 26.f}; }
     R presetBtn() const { return {892.f, 406.f, 130.f, 26.f}; }
     R saveBtn() const { return {1028.f, 406.f, 130.f, 26.f}; }
     float colX(int i) const { return 110.f + i * 66.f; }
@@ -326,12 +333,35 @@ protected:
     R noteCell(int i) const { return {colX(i), 484.f, 62.f, 116.f}; }
     R accCell(int i) const { return {colX(i), 606.f, 62.f, 30.f}; }
     R slideCell(int i) const { return {colX(i), 642.f, 62.f, 30.f}; }
+    R moreCell(int i) const { return {colX(i), 678.f, 62.f, 24.f}; }
+    R accLenBox() const { return {22.f, 606.f, 84.f, 30.f}; }
+    R slideLenBox() const { return {22.f, 642.f, 84.f, 30.f}; }
+    R vTab(int i) const { return {1012.f + i * 76.f, 62.f, 72.f, 18.f}; }
+    R fTab(int i) const { return {560.f + i * 76.f, 246.f, 72.f, 18.f}; }
+    // knobs shown now (two pages in each panel)
+    int knobCount() const { return (vPage ? 4 : 8) + (fPage ? 4 : 8); }
+    int knobParam(int k) const
+    {
+        static const int voice[8] = {pTUNE, pWAVE, pCUTOFF, pRESO, pENVMOD, pDECAY, pACCENT, pSLIDE};
+        static const int extra[4] = {pVOWEL, pGROWL, pSUB, pHARMONY};
+        static const int fx[8] = {pAMPDEC, pDRIVE, pTONE, pDLYTIME, pDLYTIMER, pDLYFB, pDLYMIX, pVOLUME};
+        static const int mod[4] = {pEVOLVE, pEVORESET, pPUMP, pPUMPRATE};
+        const int nv = vPage ? 4 : 8;
+        if (k < nv) return vPage ? extra[k & 3] : voice[k & 7];
+        k -= nv; return fPage ? mod[k & 3] : fx[k & 7];
+    }
+    R knobRect(int k) const
+    {
+        const int nv = vPage ? 4 : 8;
+        if (k < nv) return vKnob(k);
+        k -= nv; return {22.f + k * 86.f, 262.f, 84.f, 120.f};
+    }
     R gripR() const { return {W - 22.f, H - 22.f, 22.f, 22.f}; }
     R viewBox() const { return {240.f, 96.f, 700.f, 520.f}; }
     R skinRow(int i) const { return {264.f + (i % 2) * 330.f, 150.f + (i / 2) * 148.f, 316.f, 136.f}; }
     R zoomBtn(int i) const { return {264.f + i * 109.f, 486.f, 101.f, 36.f}; }
     R presetsBox() const { return {80.f, 60.f, 1020.f, 600.f}; }
-    R presetItem(int col, int row) const { return {100.f + col * 500.f, 130.f + row * 30.f, 480.f, 27.f}; }
+    R presetItem(int col, int row) const { return {100.f + col * 500.f, 130.f + row * 25.f, 480.f, 23.f}; }
     R presetsClose() const { return {980.f, 606.f, 100.f, 36.f}; }
     R saveBox() const { return {290.f, 200.f, 600.f, 270.f}; }
     R saveField() const { return {320.f, 290.f, 540.f, 52.f}; }
@@ -371,6 +401,8 @@ protected:
         if (overlay == ovSave) drawSave();
         if (overlay == ovLicense) drawLicense();
         if (overlay == ovUpdate) drawUpdate();
+        if (overlay == ovChain) drawChain();
+        if (overlay == ovRandom) drawRandomMenu();
         if (tipShown && overlay == ovNone) drawTip();
         drawGrip();
     }
@@ -422,12 +454,17 @@ protected:
         const R lc = lcdR();
         box(lc, th->lcdBg); frame(lc, th->panelEdge, -1.f, th->panelEdgeWidth);
         const bool gate = gp(pOUT_GATE) > 0.5f;
+        if (lockMode()) {
+            char lb[32]; std::snprintf(lb, sizeof(lb), "LOCK STEP %d", lockStep + 1);
+            number(lc.x + 12, lc.y + 22, lb, 16.f, th->lock, ALIGN_LEFT | ALIGN_MIDDLE);
+            frame(lockClearBtn(), th->lock); label(lockClearBtn().cx(), lockClearBtn().cy() + 1, "CLEAR LOCKS", 9.f, th->lock);
+        } else
         number(lc.x + 12, lc.y + 22, gate ? noteName((int)gp(pOUT_NOTE)).c_str() : "-", 20.f, th->lcdText, ALIGN_LEFT | ALIGN_MIDDLE);
         beginPath(); circle(lc.x + lc.w - 16, lc.y + 18, 5.f); fillColor(gate ? (th->logo == lgNeon ? Color(125, 255, 90) : th->accent) : th->lcdDim); fill();
         label(lc.x + lc.w - 28, lc.y + 18, presetNameStr.c_str(), 9.5f, th->lcdDim, ALIGN_RIGHT | ALIGN_MIDDLE);
         // filter response: cutoff + resonance peak, and the envelope's reach (ENV MOD) as a shaded band
         const R g{lc.x + 12, lc.y + 44, lc.w - 24, lc.h - 56};
-        const float fc = gp(pCUTOFF) / 127.f, res = gp(pRESO) / 127.f, env = gp(pENVMOD) / 127.f * 5.5f / std::log2(400.f);
+        const float fc = kv(pCUTOFF) / 127.f, res = kv(pRESO) / 127.f, env = kv(pENVMOD) / 127.f * 5.5f / std::log2(400.f);
         auto curve = [&](float c, const Color& col, float wdt) {
             beginPath();
             for (int i = 0; i <= 90; ++i) {
@@ -442,14 +479,15 @@ protected:
         beginPath(); rect(g.x + g.w * fc, g.y, std::max(1.f, g.w * std::min(env, 1.f - fc)), g.h); fillColor(withAlpha(th->lcdText, 0.10f)); fill();
         curve(std::min(1.f, fc + env), withAlpha(th->lcdDim, 0.8f), 1.2f);
         curve(fc, th->lcdText, 2.f);
-        for (int k = 0; k < 8; ++k)
-            drawKnob(vKnob(k), gp(kVoice[k]) / 127.f, kParamNames[kVoice[k]], paramText(kVoice[k], gp(kVoice[k])), false, drag == dkKnob && dragIndex == kVoice[k]);
+        const int nv = vPage ? 4 : 8;
+        for (int k = 0; k < nv; ++k) { const int p = knobParam(k); drawKnob(knobRect(k), kv(p) / 127.f, kParamNames[p], paramText(p, kv(p)), isLocked(p), drag == dkKnob && dragIndex == p); }
+        button(vTab(0), "VOICE", vPage == 0, 9.f); button(vTab(1), "COLOR", vPage == 1, 9.f);
     }
     void drawFxPatterns()
     {
         panelBox({14.f, 242.f, 700.f, 148.f});
-        for (int k = 0; k < 7; ++k)
-            drawKnob(fKnob(k), gp(kFx[k]) / 127.f, kParamNames[kFx[k]], paramText(kFx[k], gp(kFx[k])), false, drag == dkKnob && dragIndex == kFx[k]);
+        for (int k = vPage ? 4 : 8; k < knobCount(); ++k) { const int p = knobParam(k); drawKnob(knobRect(k), kv(p) / 127.f, kParamNames[p], paramText(p, kv(p)), isLocked(p), drag == dkKnob && dragIndex == p, 24.f, 40.f, 84.f, 102.f); }
+        button(fTab(0), "FX", fPage == 0, 9.f); button(fTab(1), "MOTION", fPage == 1, 9.f);
         panelBox({722.f, 242.f, 444.f, 148.f});
         label(736, 258, "PATTERNS", 10.5f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
         if (!patMsg.empty()) label(1154, 258, patMsg.c_str(), 9.5f, th->lock, ALIGN_RIGHT | ALIGN_MIDDLE);
@@ -463,6 +501,7 @@ protected:
             if (running && i == pp && pp != ep) frame(r, th->accent, -1.f, 2.f);
         }
         button(patCopy(), "COPY", false, 10.f); button(patPaste(), "PASTE", false, 10.f); button(patClear(), "CLEAR", false, 10.f);
+        button(chainBtn(), "CHAIN", bank->chain.active(), 10.f);
     }
 
     void drawSequencer()
@@ -482,7 +521,8 @@ protected:
         static const char* roots[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
         std::snprintf(b, sizeof(b), "ROOT %s", roots[bank->glob.root % 12]); button(rootBtn(), b, false, 10.f);
         button(snapBtn(), "SNAP", snap, 10.f);
-        button(transBtn(), "KEY TRANSPOSE", bank->glob.transpose != 0, 10.f);
+        button(transBtn(), "KEY TRANSPOSE", bank->glob.transpose != 0, 9.5f);
+        button(rndBtn(), "RANDOM", overlay == ovRandom, 10.f);
         if (!undoStack.empty()) button(undoBtn(), "UNDO", false, 10.5f);
         else { box(undoBtn(), th->btnFill); frame(undoBtn(), Color(th->btnEdge, th->bg, 0.5f)); label(undoBtn().cx(), undoBtn().cy() + 1, "UNDO", 10.5f, th->faint); }
         box(presetBtn(), th->btnFill); frame(presetBtn(), th->text, -1.f, 1.5f); label(presetBtn().cx(), presetBtn().cy() + 1, "PRESETS", 10.5f, th->text);
@@ -490,8 +530,11 @@ protected:
         // row names
         label(28, trigCell(0).cy(), "STEP", 10.f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
         label(28, noteCell(0).cy(), "NOTE", 10.f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
-        label(28, accCell(0).cy(), "ACCENT", 10.f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
-        label(28, slideCell(0).cy(), "SLIDE", 10.f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
+        label(28, accCell(0).cy() - 6, "ACCENT", 9.5f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
+        label(28, slideCell(0).cy() - 6, "SLIDE", 9.5f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
+        std::snprintf(b, sizeof(b), "LEN %d", p.accRow()); label(28, accCell(0).cy() + 8, b, 8.5f, p.accLen ? th->lock : th->faint, ALIGN_LEFT | ALIGN_MIDDLE);
+        std::snprintf(b, sizeof(b), "LEN %d", p.slideRow()); label(28, slideCell(0).cy() + 8, b, 8.5f, p.slideLen ? th->lock : th->faint, ALIGN_LEFT | ALIGN_MIDDLE);
+        label(28, moreCell(0).cy(), "CHANCE/RPT", 8.5f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
         const int now = stepNow();
         // pitch range shown in the note cells: two octaves and a half around the pattern
         int lo = 127, hi = 0;
@@ -501,10 +544,26 @@ protected:
         for (int i = 0; i < 16; ++i) {
             const int s = stepPg * 16 + i;
             const bool inLen = s < p.length, on = p.on[s] != 0;
-            const R t = trigCell(i), n = noteCell(i), a = accCell(i), sl = slideCell(i);
+            const R t = trigCell(i), n = noteCell(i), a = accCell(i), sl = slideCell(i), mc = moreCell(i);
             const Color cell = inLen ? ((i / 4) % 2 ? th->stepAlt : th->stepFill) : Color(th->stepOff, th->bg, 0.4f);
-            box(t, cell, 3.f); box(n, cell, 3.f); box(a, cell, 3.f); box(sl, cell, 3.f);
+            const Color offRow = Color(th->stepOff, th->bg, 0.4f);
+            box(t, cell, 3.f); box(n, cell, 3.f); box(a, s < p.accRow() ? cell : offRow, 3.f); box(sl, s < p.slideRow() ? cell : offRow, 3.f); box(mc, cell, 3.f);
             if (!inLen) continue;
+            // chance / ratchet
+            if (p.prob[s] < 100) { box({mc.x + 2, mc.y + mc.h - 5, (mc.w - 4) * p.prob[s] / 100.f, 3}, th->lock, 1.f); }
+            {
+                char mb[16];
+                if (p.prob[s] < 100 && p.ratchet[s] > 1) std::snprintf(mb, sizeof(mb), "%d%% x%d", p.prob[s], p.ratchet[s]);
+                else if (p.prob[s] < 100) std::snprintf(mb, sizeof(mb), "%d%%", p.prob[s]);
+                else if (p.ratchet[s] > 1) std::snprintf(mb, sizeof(mb), "x%d", p.ratchet[s]);
+                else std::snprintf(mb, sizeof(mb), "-");
+                label(mc.cx(), mc.cy(), mb, 8.5f, (p.prob[s] < 100 || p.ratchet[s] > 1) ? th->text : th->faint);
+            }
+            if (p.tie[s]) {               // a tied step: the previous note goes on
+                box({t.x - 6.f, t.y + 3, t.w + 3.f, 8}, withAlpha(onColor(), 0.8f), 2.f);
+                label(t.cx(), t.y + 24, "TIE", 9.f, th->text);
+                continue;
+            }
             // trig
             if (on) {
                 const Color lc = onColor();
@@ -515,6 +574,8 @@ protected:
             number(t.cx(), t.y + 24, b, 12.f, on ? th->stepText : th->faint);
             if (s % 4 == 0) box({t.cx() - 7.f, t.y + 32.f, 14.f, 1.f}, on ? th->stepText : th->faint);
             if (s == now) frame(t, th->text, 3.f, 2.f);
+            if (p.hasLocks(s)) { beginPath(); circle(t.x + t.w - 8, t.y + t.h - 8, 2.8f); fillColor(th->lock); fill(); }
+            if (lockStep == s) frame({t.x - 2, t.y - 2, t.w + 4, t.h + 4}, th->lock, 4.f, 2.f);
             // note: name + a marker at its pitch; arrows = octave up / down
             const float py = n.y + n.h - 22 - (n.h - 44) * clampf((p.note[s] - base) / (float)span, 0.f, 1.f);
             const Color ink = on ? th->stepText : th->faint;
@@ -534,6 +595,116 @@ protected:
         }
     }
     static Color withAlpha(Color c, float a) { c.alpha *= a; return c; }
+
+    // ------------------------------------------------------------------ step locks
+    bool lockMode() const { return lockStep >= 0; }
+    float kv(int p) { if (lockMode() && p < kLockParams) { const uint8_t v = pat().locks[lockStep][p]; if (v != kNoLock) return v; } return gp(p); }
+    bool isLocked(int p) { return lockMode() && p < kLockParams && pat().locks[lockStep][p] != kNoLock; }
+    void setLock(int p, int v)
+    {
+        if (!lockMode() || p >= kLockParams) return;
+        if (v != (int)kNoLock) v = clampi(v, 0, 127);
+        if (pat().locks[lockStep][p] == v) return;
+        char b[48]; std::snprintf(b, sizeof(b), "k %d %d %d %d", editPattern(), lockStep, p, v); sendCmd(b);
+    }
+    int chainPlayingPattern() const { return gp(pOUT_STEP) >= 0.f ? (int)std::lround(gp(pOUT_PATTERN)) : -1; }
+    // ------------------------------------------------------------------ pattern CHAIN window (same in every Kinetik plug-in)
+    R chainBox() const { return {240.f, 110.f, 700.f, 470.f}; }
+    R chainOnBtn() const { return {700.f, 132.f, 216.f, 36.f}; }
+    R chainAddBtn(int i) const { return {264.f + (i % 8) * 82.f, 214.f + (i / 8) * 40.f, 76.f, 34.f}; }
+    R chainChip(int i) const { return {264.f + (i % 8) * 82.f, 340.f + (i / 8) * 52.f, 76.f, 46.f}; }
+    R chainClearBtn() const { return {264.f, 524.f, 140.f, 36.f}; }
+    R chainCloseBtn() const { return {796.f, 524.f, 120.f, 36.f}; }
+    void sendChain(const Chain& c) { sendCmd(c.line()); repaint(); }
+    void drawChain()
+    {
+        const R bx = chainBox();
+        overlayBox(bx);
+        const Chain& c = bank->chain;
+        number(264, bx.y + 40, "Pattern chain", 22.f, th->text, ALIGN_LEFT | ALIGN_MIDDLE);
+        button(chainOnBtn(), c.on ? "CHAIN ON" : "CHAIN OFF", c.on != 0, 11.f);
+        label(264, 198, "ADD A PATTERN AT THE END", 9.5f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
+        char b[24];
+        for (int i = 0; i < kPatterns; ++i) {
+            std::snprintf(b, sizeof(b), "A%02d", i + 1);
+            const R r = chainAddBtn(i);
+            box(r, th->btnFill); frame(r, th->btnEdge);
+            number(r.cx(), r.cy() + 1, b, 13.f, th->text);
+        }
+        label(264, 322, "THE CHAIN (CLICK = MORE REPEATS, RIGHT-CLICK = REMOVE)", 9.5f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
+        if (c.n == 0) label(264, 362, "empty: add patterns above, then switch CHAIN ON", 10.f, th->faint, ALIGN_LEFT | ALIGN_MIDDLE);
+        const int playing = chainPlayingPattern();
+        for (int i = 0; i < c.n; ++i) {
+            const R r = chainChip(i);
+            const bool now = c.on && playing == c.pat[i];
+            if (now) box(r, th->selFill); else { box(r, th->btnFill); frame(r, th->btnEdge); }
+            std::snprintf(b, sizeof(b), "A%02d", c.pat[i] + 1);
+            number(r.cx(), r.y + 17, b, 13.f, now ? th->selText : th->text);
+            std::snprintf(b, sizeof(b), "x%d", c.rep[i]);
+            label(r.cx(), r.y + 35, b, 9.5f, now ? th->selText : th->dim);
+        }
+        button(chainClearBtn(), "CLEAR", false, 10.5f);
+        button(chainCloseBtn(), "CLOSE", true, 11.f);
+    }
+    bool chainClick(float x, float y, bool right)
+    {
+        Chain c = bank->chain;
+        if (chainOnBtn().in(x, y)) { c.on = c.on ? 0 : (c.n > 0 ? 1 : 0); sendChain(c); return true; }
+        for (int i = 0; i < kPatterns; ++i) if (chainAddBtn(i).in(x, y)) { if (c.n < Chain::kMax) { c.add(i, 1); sendChain(c); } return true; }
+        for (int i = 0; i < c.n; ++i) if (chainChip(i).in(x, y)) {
+            if (right) c.remove(i); else c.rep[i] = (uint8_t)(c.rep[i] >= 16 ? 1 : c.rep[i] + 1);
+            sendChain(c); return true;
+        }
+        if (chainClearBtn().in(x, y)) { c.clear(); sendChain(c); return true; }
+        if (chainCloseBtn().in(x, y) || !chainBox().in(x, y)) { overlay = ovNone; repaint(); }
+        return true;
+    }
+
+    // ------------------------------------------------------------------ RANDOM (sound / pattern / both), undoable
+    float urand() { rndSeed ^= rndSeed << 13; rndSeed ^= rndSeed >> 17; rndSeed ^= rndSeed << 5; return (rndSeed & 0xFFFFFF) / 16777216.f; }
+    float rr(float lo, float hi) { return std::round(lo + urand() * (hi - lo)); }
+    void randomSound(std::vector<float>& v)
+    {
+        v[pWAVE] = urand() < 0.6f ? 0.f : (urand() < 0.7f ? 127.f : rr(20, 110));
+        v[pCUTOFF] = rr(14, 70); v[pRESO] = rr(50, 122); v[pENVMOD] = rr(30, 120); v[pDECAY] = rr(20, 95);
+        v[pACCENT] = rr(40, 127); v[pSLIDE] = rr(20, 90);
+        v[pAMPDEC] = urand() < 0.6f ? 127.f : rr(50, 120);
+        v[pDRIVE] = urand() < 0.45f ? 0.f : rr(20, 110); v[pTONE] = rr(50, 127);
+        v[pDLYTIME] = (float)((int)(urand() * 8) * 16 + 8); v[pDLYFB] = rr(20, 90); v[pDLYMIX] = urand() < 0.5f ? 0.f : rr(15, 70);
+        v[pVOWEL] = urand() < 0.2f ? rr(30, 110) : 0.f; v[pGROWL] = urand() < 0.2f ? rr(15, 80) : 0.f; v[pSUB] = urand() < 0.3f ? rr(30, 90) : 0.f;
+        v[pHARMONY] = urand() < 0.15f ? (float)(int)(urand() * 7) * 18.3f + 9.f : 0.f; v[pDLYTIMER] = urand() < 0.25f ? rr(8, 127) : 0.f;
+    }
+    void randomPattern(Pattern& P)
+    {
+        const uint8_t keepLen = P.length, keepSwing = P.swing;
+        P.clear(); P.length = keepLen; P.swing = keepSwing;
+        acidGen(P, bank->glob.scale, bank->glob.root, (uint32_t)(urand() * 4e9f) | 1u, 0.5f + urand() * 0.4f, 0.1f + urand() * 0.3f, 0.15f + urand() * 0.35f);
+        static const int lockable[6] = {pCUTOFF, pENVMOD, pDECAY, pDLYMIX, pDRIVE, pRESO};
+        for (int s = 0; s < P.length; ++s) if (P.on[s] && urand() < 0.22f) {
+            const int k = lockable[(int)(urand() * 6) % 6];
+            P.locks[s][k] = (uint8_t)(k == pDLYMIX ? rr(40, 110) : rr(10, 127));
+        }
+    }
+    void randomize(int what)          // 0 = sound, 1 = pattern, 2 = both
+    {
+        rndSeed ^= (uint32_t)(nowSec() * 1000.0) * 2654435761u; if (!rndSeed) rndSeed = 1;
+        static const char* names[3] = {"random sound", "random pattern", "random all"};
+        snapshot(names[what]);
+        std::vector<float> nv(values, values + kTotalParams);
+        std::unique_ptr<Bank> nb(new Bank(*bank));
+        if (what != 1) randomSound(nv);
+        if (what != 0) randomPattern(nb->patterns[editPattern()]);
+        lockStep = -1;
+        applyState(nv.data(), nb.get());
+        presetNameStr = "(random)";
+    }
+    void drawRandomMenu()
+    {
+        static const char* items[3] = {"NEW SOUND", "NEW PATTERN", "BOTH"};
+        const R all{rndMenu(0).x - 4, rndMenu(0).y - 4, rndMenu(0).w + 8, 3 * 34.f + 6};
+        box(all, th->panel, 6.f); frame(all, th->text, 6.f, 1.5f);
+        for (int i = 0; i < 3; ++i) button(rndMenu(i), items[i], false, 10.f);
+    }
 
     // ACID GEN: a new line for the edited pattern in the chosen scale and root
     void acidGenerate()
@@ -580,7 +751,7 @@ protected:
         number(100, 92, "Presets", 22.f, th->text, ALIGN_LEFT | ALIGN_MIDDLE);
         label(100, 120, "FACTORY", 10.f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
         label(600, 120, "YOURS", 10.f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
-        for (int i = 0; i < kNumPresets && i < 15; ++i) {
+        for (int i = 0; i < kNumPresets && i < 18; ++i) {
             const R r = presetItem(0, i);
             const bool sel = presetNameStr == kPresets[i].name;
             if (sel) box(r, th->selFill); else box(r, th->btnFill);
@@ -588,7 +759,7 @@ protected:
             label(r.x + r.w - 10, r.cy() + 1, kPresets[i].desc, 8.5f, sel ? th->selText : th->dim, ALIGN_RIGHT | ALIGN_MIDDLE);
         }
         if (userPresets.empty()) label(600, 145, "none yet: SAVE AS PRESET stores the sound and the 16 patterns", 9.5f, th->faint, ALIGN_LEFT | ALIGN_MIDDLE);
-        for (int i = 0; i < (int)userPresets.size() && i < 15; ++i) {
+        for (int i = 0; i < (int)userPresets.size() && i < 18; ++i) {
             const R r = presetItem(1, i);
             const bool sel = presetNameStr == userPresets[i];
             if (sel) box(r, th->selFill); else box(r, th->btnFill);
@@ -599,8 +770,8 @@ protected:
     }
     void presetsClick(float x, float y)
     {
-        for (int i = 0; i < kNumPresets && i < 15; ++i) if (presetItem(0, i).in(x, y)) { loadFactory(i); return; }
-        for (int i = 0; i < (int)userPresets.size() && i < 15; ++i) if (presetItem(1, i).in(x, y)) { loadUser(userPresets[i]); return; }
+        for (int i = 0; i < kNumPresets && i < 18; ++i) if (presetItem(0, i).in(x, y)) { loadFactory(i); return; }
+        for (int i = 0; i < (int)userPresets.size() && i < 18; ++i) if (presetItem(1, i).in(x, y)) { loadUser(userPresets[i]); return; }
         if (presetsClose().in(x, y) || !presetsBox().in(x, y)) { overlay = ovNone; presetMsg.clear(); }
         repaint();
     }
@@ -883,10 +1054,29 @@ protected:
             "ACCENT: how much louder and brighter the accented steps are; accents in a row climb higher.", "SLIDE: glide time between sliding steps."};
         static const char* ft[7] = {"AMP DECAY: fade of each note (HOLD = full level while the gate is open).", "DRIVE: saturation after the filter.", "TONE: darker / brighter after the drive.",
             "DELAY TIME: echo time in tempo.", "FEEDBACK: echo repeats (ping-pong).", "DELAY MIX: echo level.", "VOLUME: output level."};
-        for (int k = 0; k < 8; ++k) if (vKnob(k).in(x, y)) return vt[k];
-        for (int k = 0; k < 7; ++k) if (fKnob(k).in(x, y)) return ft[k];
+        for (int k = 0; k < knobCount(); ++k) if (knobRect(k).in(x, y)) {
+            const int p = knobParam(k);
+            switch (p) {
+            case pVOWEL: return "VOWEL: blends in a formant filter whose vowel follows the cutoff and its envelope (closed = u, open = i): talking acid.";
+            case pGROWL: return "GROWL: the oscillator modulates the filter at audio rate: a rougher, buzzing edge.";
+            case pSUB: return "SUB: a clean square one octave down, after the filter.";
+            case pHARMONY: return "HARMONY: a second oscillator that follows the line at an interval of the scale.";
+            case pDLYTIMER: return "R TIME: the right echo's own time (= LEFT: same as DELAY TIME), for off-grid stereo echoes.";
+            case pEVOLVE: return "EVOLVE: every loop the line changes a little (notes in the scale, accents, slides). The written pattern is kept.";
+            case pEVORESET: return "EVO RESET: go back to the written line every 2, 4, 8 or 16 loops (NEVER = keep drifting).";
+            case pPUMP: return "PUMP: ducks the sound on every beat division, like a kick sidechain.";
+            case pPUMPRATE: return "PUMP RATE: how often it ducks.";
+            default: break;
+            }
+            for (int v = 0; v < 8; ++v) if (p == kVoice[v]) return vt[v];
+            for (int v = 0; v < 7; ++v) if (p == kFx[v]) return ft[v];
+        }
+        for (int i = 0; i < 2; ++i) if (vTab(i).in(x, y)) return "VOICE: oscillator and filter. COLOR: vowel filter, growl, sub and harmony.";
+        for (int i = 0; i < 2; ++i) if (fTab(i).in(x, y)) return "FX: amp, drive and echo. MOTION: EVOLVE (the line changes by itself) and PUMP.";
+        if (accLenBox().in(x, y) || slideLenBox().in(x, y)) return "Own length of this row (drag up / down, double-click = the pattern length): accents and slides then turn around the notes.";
+        for (int i = 0; i < 16; ++i) if (moreCell(i).in(x, y)) return "CHANCE / REPEAT: drag up / down = chance the step plays; right-click = 1 to 4 repeats inside the step; double-click = reset.";
         for (int i = 0; i < 16; ++i) {
-            if (trigCell(i).in(x, y)) return "Click: note on / off on this step (drag to paint).";
+            if (trigCell(i).in(x, y)) return "Click: note on / off (drag to paint). Shift+click: TIE (the previous note goes on). Right-click: lock knobs on this step (filter, delay send, drive...).";
             if (noteCell(i).in(x, y)) return "Drag up / down: the note (semitones; SNAP keeps it in the scale). Click the + / - ends: an octave up / down. Double-click: the root.";
             if (accCell(i).in(x, y)) return "ACCENT: louder, brighter and snappier note.";
             if (slideCell(i).in(x, y)) return "SLIDE: this note glides into the next one without a new attack.";
@@ -897,7 +1087,10 @@ protected:
         if (snapBtn().in(x, y)) return "SNAP: dragged notes stay in the scale.";
         if (transBtn().in(x, y)) return "KEY TRANSPOSE: while the pattern plays, MIDI keys transpose it (C3 = as written) instead of playing notes.";
         if (rotL().in(x, y) || rotR().in(x, y)) return "Shift the whole pattern one step left or right.";
-        for (int i = 0; i < 2; ++i) if (pageBtn(i).in(x, y)) return "Show steps 1-16 or 17-32 (set LENGTH up to 32).";
+        for (int i = 0; i < 2; ++i) if (pageBtn(i).in(x, y)) return "Show steps 1-16 or 17-32 (a 16-step pattern becomes 32 steps long when you open 17-32).";
+        if (chainBtn().in(x, y)) return "CHAIN: play a list of patterns in a loop, each a number of times.";
+        if (rndBtn().in(x, y)) return "RANDOM: a new sound, a new pattern (notes, accents, slides, locks), or both. UNDO restores.";
+        if (lockMode() && lockClearBtn().in(x, y)) return "Remove every lock of this step.";
         if (patLenBox().in(x, y)) return "Pattern length in steps (1-32). Drag or scroll.";
         if (swingBox().in(x, y)) return "Swing: delays every second 16th (50% = straight). Drag or scroll.";
         if (playBtn().in(x, y)) return "Internal play when your music software is stopped (KBAS-1 follows its transport when it plays).";
@@ -942,7 +1135,7 @@ protected:
             if (ev.key == 'z' || ev.key == 'Z') { if (ev.mod & kModifierShift) redo(); else undo(); return true; }
             if (ev.key == 'y' || ev.key == 'Y') { redo(); return true; }
         }
-        if (ev.press && ev.key == kKeyEscape && overlay != ovNone) { overlay = ovNone; repaint(); return true; }
+        if (ev.press && ev.key == kKeyEscape) { if (overlay != ovNone) overlay = ovNone; else lockStep = -1; repaint(); return true; }
         return false;
     }
 
@@ -952,8 +1145,9 @@ protected:
         if (tipShown) { tipShown = false; repaint(); }
         tipBlockUntil = nowSec() + 1.0;
         if (!ev.press) {
-            if (drag == dkKnob || drag == dkTempo) editParameter((uint32_t)dragIndex, false);
+            if ((drag == dkKnob && !lockMode()) || drag == dkTempo) editParameter((uint32_t)dragIndex, false);
             if (drag == dkPatLen || drag == dkSwing) sendPatternSettings();
+            if (drag == dkRowLen) sendRows();
             if (drag == dkNote) { if (auditioning >= 0) { audition(auditioning, false); auditioning = -1; } sendStep(dragIndex); }
             if (drag == dkResize) saveView();
             if (drag != dkNone) { drag = dkNone; repaint(); }
@@ -967,6 +1161,11 @@ protected:
         if (overlay == ovPresets) { presetsClick(x, y); return true; }
         if (overlay == ovLicense) return licenseClick(x, y);
         if (overlay == ovUpdate) return updateClick(x, y);
+        if (overlay == ovChain) return chainClick(x, y, right);
+        if (overlay == ovRandom) {
+            for (int i = 0; i < 3; ++i) if (rndMenu(i).in(x, y)) { overlay = ovNone; randomize(i); return true; }
+            overlay = ovNone; repaint(); return true;
+        }
         if (overlay == ovSave) { if (saveOk().in(x, y)) commitSave(); else if (saveCancel().in(x, y) || !saveBox().in(x, y)) { overlay = ovNone; repaint(); } return true; }
         if (overlay == ovSkins) {
             static const int zooms[6] = {80, 100, 120, 140, 160, 200};
@@ -981,9 +1180,15 @@ protected:
         if (tempoBox().in(x, y)) { drag = dkTempo; dragIndex = pTEMPO; dragY = y; dragStart = gp(pTEMPO); editParameter(pTEMPO, true); return true; }
         if (patLenBox().in(x, y)) { drag = dkPatLen; dragY = y; dragStart = pat().length; return true; }
         if (swingBox().in(x, y)) { drag = dkSwing; dragY = y; dragStart = pat().swing; return true; }
-        for (int k = 0; k < 15; ++k) {
-            const int p = k < 8 ? kVoice[k] : kFx[k - 8];
-            if (!(k < 8 ? vKnob(k) : fKnob(k - 8)).in(x, y)) continue;
+        for (int k = 0; k < knobCount(); ++k) {
+            const int p = knobParam(k);
+            if (!knobRect(k).in(x, y)) continue;
+            if (lockMode()) {
+                if (dbl) { setLock(p, (int)kNoLock); repaint(); return true; }
+                drag = dkKnob; dragIndex = p; dragY = y; dragStart = kv(p);
+                if (!isLocked(p)) setLock(p, (int)std::lround(dragStart));
+                repaint(); return true;
+            }
             if (dbl) { setParamGesture((uint32_t)p, kParamDefaults[p]); repaint(); return true; }
             drag = dkKnob; dragIndex = p; dragY = y; dragStart = gp(p); editParameter((uint32_t)p, true); repaint(); return true;
         }
@@ -991,7 +1196,13 @@ protected:
         if (patCopy().in(x, y)) { patClip = editPattern(); showPatMsg("A" + std::to_string(patClip + 1) + " copied"); return true; }
         if (patPaste().in(x, y) && patClip >= 0) { char b[32]; std::snprintf(b, sizeof(b), "cp %d %d", patClip, editPattern()); sendCmd(b); showPatMsg("pasted"); return true; }
         if (patClear().in(x, y)) { char b[24]; std::snprintf(b, sizeof(b), "cl %d", editPattern()); sendCmd(b); repaint(); return true; }
-        for (int i = 0; i < 2; ++i) if (pageBtn(i).in(x, y)) { stepPg = i; repaint(); return true; }
+        for (int i = 0; i < 2; ++i) if (pageBtn(i).in(x, y)) {
+            if (i == 1 && pat().length <= 16) { pat().length = 32; sendPatternSettings(); }   // the second page makes the pattern 32 steps long
+            stepPg = i; repaint(); return true;
+        }
+        if (chainBtn().in(x, y)) { overlay = ovChain; repaint(); return true; }
+        if (rndBtn().in(x, y)) { overlay = ovRandom; repaint(); return true; }
+        if (lockMode() && lockClearBtn().in(x, y)) { char b[32]; std::snprintf(b, sizeof(b), "kc %d %d", editPattern(), lockStep); sendCmd(b); repaint(); return true; }
         if (rotL().in(x, y) || rotR().in(x, y)) { char b[32]; std::snprintf(b, sizeof(b), "rot %d %d", editPattern(), rotL().in(x, y) ? -1 : 1); sendCmd(b); repaint(); return true; }
         if (acidBtn().in(x, y)) { acidGenerate(); return true; }
         if (scaleBtn().in(x, y)) { bank->glob.scale = (uint8_t)((bank->glob.scale + (right ? kScales - 1 : 1)) % kScales); sendGlob(); repaint(); return true; }
@@ -1001,14 +1212,31 @@ protected:
         if (undoBtn().in(x, y)) { if (right) redo(); else undo(); return true; }
         if (presetBtn().in(x, y)) { scanUser(); overlay = ovPresets; repaint(); return true; }
         if (saveBtn().in(x, y)) { scanUser(); openSave(); return true; }
+        for (int i = 0; i < 2; ++i) if (vTab(i).in(x, y)) { vPage = i; repaint(); return true; }
+        for (int i = 0; i < 2; ++i) if (fTab(i).in(x, y)) { fPage = i; repaint(); return true; }
+        if (accLenBox().in(x, y) || slideLenBox().in(x, y)) {
+            const bool acc = accLenBox().in(x, y);
+            if (dbl) { if (acc) pat().accLen = 0; else pat().slideLen = 0; sendRows(); return true; }
+            drag = dkRowLen; dragIndex = acc ? 0 : 1; dragY = y; dragStart = acc ? pat().accRow() : pat().slideRow(); return true;
+        }
         // steps
         Pattern& p = pat();
         for (int i = 0; i < 16; ++i) {
             const int s = stepPg * 16 + i;
             if (s >= p.length) continue;
+            if (trigCell(i).in(x, y) && right) { lockStep = lockStep == s ? -1 : s; repaint(); return true; }
+            if (trigCell(i).in(x, y) && (ev.mod & kModifierShift)) {
+                paintVal = !p.tie[s]; p.tie[s] = paintVal; sendMore(s);
+                drag = dkPaintTie; repaint(); return true;
+            }
             if (trigCell(i).in(x, y)) {
-                paintVal = !p.on[s]; p.on[s] = paintVal; sendStep(s);
+                paintVal = !p.on[s]; p.on[s] = paintVal; if (paintVal && p.tie[s]) { p.tie[s] = 0; sendMore(s); } sendStep(s);
                 drag = dkPaint; repaint(); return true;
+            }
+            if (moreCell(i).in(x, y)) {
+                if (dbl) { p.prob[s] = 100; p.ratchet[s] = 1; sendMore(s); repaint(); return true; }
+                if (right) { p.ratchet[s] = (uint8_t)(p.ratchet[s] >= 4 ? 1 : p.ratchet[s] + 1); sendMore(s); repaint(); return true; }
+                drag = dkProb; dragIndex = s; dragY = y; dragStart = p.prob[s]; repaint(); return true;
             }
             if (noteCell(i).in(x, y)) {
                 const R n = noteCell(i);
@@ -1045,7 +1273,7 @@ protected:
         const float sens = (ev.mod & kModifierShift) ? 0.12f : 0.6f;
         const float v = dragStart + (dragY - y) * sens;
         switch (drag) {
-        case dkKnob: setParam((uint32_t)dragIndex, clampf(v, 0.f, 127.f)); repaint(); break;
+        case dkKnob: if (lockMode()) setLock(dragIndex, (int)std::lround(clampf(v, 0.f, 127.f))); else setParam((uint32_t)dragIndex, clampf(v, 0.f, 127.f)); repaint(); break;
         case dkTempo: setParam(pTEMPO, clampf(std::round((dragStart + (dragY - y) * ((ev.mod & kModifierShift) ? 0.05f : 0.5f)) * 10.f) / 10.f, 40.f, 240.f)); repaint(); break;
         case dkPatLen: pat().length = (uint8_t)clampi((int)std::lround(dragStart + (dragY - y) * 0.15f), 1, kSteps); repaint(); break;
         case dkSwing: pat().swing = (uint8_t)clampi((int)std::lround(dragStart + (dragY - y) * 0.15f), 50, 80); repaint(); break;
@@ -1059,15 +1287,19 @@ protected:
             }
             break;
         }
-        case dkPaint: {
+        case dkPaint: case dkPaintTie: {
             Pattern& p = pat();
             for (int i = 0; i < 16; ++i) {
                 const R r = trigCell(i);
                 const int s = stepPg * 16 + i;
-                if (x >= r.x && x < r.x + r.w + 4.f && s < p.length && (p.on[s] != 0) != paintVal) { p.on[s] = paintVal; sendStep(s); }
+                if (!(x >= r.x && x < r.x + r.w + 4.f && s < p.length)) continue;
+                if (drag == dkPaint && (p.on[s] != 0) != paintVal) { p.on[s] = paintVal; sendStep(s); }
+                if (drag == dkPaintTie && (p.tie[s] != 0) != paintVal) { p.tie[s] = paintVal; sendMore(s); }
             }
             repaint(); break;
         }
+        case dkProb: { const int v2 = clampi((int)std::lround(dragStart + (dragY - y) * 0.8f), 0, 100); if (pat().prob[dragIndex] != v2) { pat().prob[dragIndex] = (uint8_t)v2; sendMore(dragIndex); } repaint(); break; }
+        case dkRowLen: { const int v2 = clampi((int)std::lround(dragStart + (dragY - y) * 0.15f), 1, pat().length); if (dragIndex == 0) pat().accLen = (uint8_t)v2; else pat().slideLen = (uint8_t)v2; repaint(); break; }
         default: break;
         }
         return true;
@@ -1078,12 +1310,16 @@ protected:
         const float x = ev.pos.getX() / sx, y = ev.pos.getY() / sx;
         const float d = ev.delta.getY() > 0 ? 1.f : (ev.delta.getY() < 0 ? -1.f : 0.f);
         if (d == 0.f || overlay != ovNone) return false;
-        for (int k = 0; k < 15; ++k) {
-            const int p = k < 8 ? kVoice[k] : kFx[k - 8];
-            if ((k < 8 ? vKnob(k) : fKnob(k - 8)).in(x, y)) { setParamGesture((uint32_t)p, clampf(gp(p) + d, 0.f, 127.f)); repaint(); return true; }
+        for (int k = 0; k < knobCount(); ++k) {
+            const int p = knobParam(k);
+            if (knobRect(k).in(x, y)) {
+                if (lockMode()) setLock(p, (int)clampf(kv(p) + d, 0.f, 127.f)); else setParamGesture((uint32_t)p, clampf(gp(p) + d, 0.f, 127.f));
+                repaint(); return true;
+            }
         }
         for (int i = 0; i < 16; ++i) {
             const int s = stepPg * 16 + i;
+            if (moreCell(i).in(x, y) && s < pat().length) { pat().prob[s] = (uint8_t)clampi(pat().prob[s] + (int)d * 5, 0, 100); sendMore(s); repaint(); return true; }
             if (noteCell(i).in(x, y) && s < pat().length) { setNote(s, snapNote(pat().note[s] + (int)d, (int)d)); repaint(); return true; }
         }
         if (tempoBox().in(x, y)) { setParamGesture(pTEMPO, clampf(gp(pTEMPO) + d, 40.f, 240.f)); repaint(); return true; }
@@ -1101,6 +1337,10 @@ protected:
         flushPv();
         if (updater && (int)updater->getState() != updLastState) { updLastState = (int)updater->getState(); repaint(); }
         if (!patMsg.empty() && nowSec() > patMsgUntil) { patMsg.clear(); repaint(); }
+        if (bank->chain.active() && drag == dkNone) {          // in a chain, the view follows the music
+            const int pp = chainPlayingPattern();
+            if (pp >= 0 && pp != editPattern()) { setParamGesture(pPATTERN, (float)pp); lockStep = -1; repaint(); }
+        }
         if (viewDirty && drag != dkResize && ++viewDirtyTicks > 30) saveView();
     }
 
@@ -1112,7 +1352,7 @@ private:
     const Theme* th = &kThemes[kDefaultSkin];
     FontId fonts[kFontCount] = {};
     NanoImage haloImage;
-    int stepPg = 0, lockStep = -1, auditioning = -1;
+    int stepPg = 0, lockStep = -1, auditioning = -1, vPage = 0, fPage = 0;
     bool snap = true;
     uint32_t rndSeed = 0x2545F491u;
     Overlay overlay = ovNone;

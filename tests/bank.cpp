@@ -40,6 +40,14 @@ int main()
     applyCommand(a, "rot 7 -1"); check(a.patterns[7].note[5] == 45, "rot shifts back");
     applyCommand(a, "cl 7"); check(a.patterns[7].isDefault(), "cl clears");
     check(!deserializeBank(b, "KFX81\n"), "other formats are refused");
+    applyCommand(a, "k 3 5 2 20"); applyCommand(a, "k 3 5 13 127"); applyCommand(a, "C 1 2 3:2 0:1");
+    check(deserializeBank(b, serializeBank(a).c_str()) && b.patterns[3].locks[5][2] == 20 && b.patterns[3].locks[5][13] == 127 && b.chain.on && b.chain.n == 2, "locks and chain survive the text");
+    applyCommand(a, "rot 3 1"); check(a.patterns[3].locks[6][2] == 20, "locks follow rotation");
+    applyCommand(a, "kc 3 6"); check(!a.patterns[3].hasLocks(6), "kc clears a step's locks");
+    check(applyCommand(a, "k 3 5 15 1") == -1, "only sound parameters can be locked");
+    applyCommand(a, "R 3 5 7"); applyCommand(a, "y 3 2 40 3 1");
+    check(deserializeBank(b, serializeBank(a).c_str()) && b.patterns[3].accLen == 5 && b.patterns[3].slideLen == 7 && b.patterns[3].prob[2] == 40 && b.patterns[3].ratchet[2] == 3 && b.patterns[3].tie[2] == 1,
+          "row lengths, probability, ratchet and tie survive");
 
     // presets: build, round trip, notes inside the preset key
     bool allOk = true, inKey = true, haveNotes = true;

@@ -135,6 +135,42 @@ static void pLongLine(PB& b)
     b.line(0, "G1 G1 G2! G1 F1~ G1 - A#1 G1 G1 D2! G1 F1 G1~ A#1 C2 G1 G1 G2! G1 D#2~ D2 - G1 G1 F2! G1 D2 C2~ A#1 G1 F1!");
 }
 
+static void pTalkingAcid(PB& b)
+{
+    b.key(9, 1);
+    b.set({{pCUTOFF, 30}, {pRESO, 90}, {pENVMOD, 100}, {pDECAY, 60}, {pACCENT, 90}, {pVOWEL, 100}, {pTEMPO, 126}});
+    b.line(0, "A1 A1! C2 A1~ E2 A1 G1! A1 A1~ D2 A1 C2! A1 E2~ G2 A1");
+}
+static void pEvolvingLine(PB& b)
+{
+    b.key(7, 2);
+    b.set({{pCUTOFF, 34}, {pRESO, 96}, {pENVMOD, 80}, {pDECAY, 46}, {pACCENT, 85}, {pEVOLVE, 50}, {pEVORESET, 75}, {pDLYMIX, 30}, {pDLYTIME, 104}, {pTEMPO, 132}});
+    b.line(0, "G1 G1 G#1 G1! G1 A#1~ G1 G1 D2! G1 F1 G1~ G#1 G1 G2! G1");
+}
+static void pPumpingAcid(PB& b)
+{
+    b.key(2, 1);
+    b.set({{pCUTOFF, 40}, {pRESO, 100}, {pENVMOD, 70}, {pDECAY, 40}, {pACCENT, 80}, {pPUMP, 100}, {pSUB, 60}, {pDRIVE, 50}, {pTEMPO, 128}});
+    b.line(0, "D1 D1 D2! D1 D1 F1~ D1 D1! C2 D1 D1 A1~ D1 D1 D2! D1");
+}
+static void pPolymeter(PB& b)
+{
+    b.key(4, 2);
+    b.set({{pCUTOFF, 32}, {pRESO, 104}, {pENVMOD, 90}, {pDECAY, 40}, {pACCENT, 110}, {pSLIDE, 50}, {pGROWL, 30}, {pTEMPO, 134}});
+    b.line(0, "E1 E1 F1 E1 G1 E1 E2 E1 F1 E1 B1 E1 E1 C2 E1 F1");
+    Pattern& P = b.b.patterns[0];
+    for (int s = 0; s < 16; ++s) { P.accent[s] = 0; P.slide[s] = 0; }
+    P.accent[0] = 1; P.accent[3] = 1; P.accLen = 5;          // accents turn every 5 steps
+    P.slide[2] = 1; P.slideLen = 7;                          // a slide every 7
+    P.ratchet[15] = 2; P.prob[6] = 50; P.prob[13] = 60;
+}
+static void pHarmonyLead(PB& b)
+{
+    b.key(9, 1);
+    b.set({{pCUTOFF, 52}, {pRESO, 80}, {pENVMOD, 70}, {pDECAY, 56}, {pACCENT, 80}, {pHARMONY, 75}, {pDLYMIX, 40}, {pDLYTIME, 104}, {pDLYTIMER, 88}, {pTUNE, 64}, {pTEMPO, 124}});
+    b.line(0, "A2 - C3! A2~ E3 - D3 C3~ A2 - G2! A2 - E3~ D3 C3");
+}
+
 struct PresetDef { const char* name; const char* desc; void (*build)(PB&); };
 static const PresetDef kPresets[] = {
     {"Init",           "Base sound, empty pattern",                              pInit},
@@ -150,6 +186,11 @@ static const PresetDef kPresets[] = {
     {"Accent Wave",    "One note, the accents make the line",                    pAccentWave},
     {"Distorted Lead", "High line through heavy drive",                          pDistortedLead},
     {"Long Line",      "A 32-step line",                                         pLongLine},
+    {"Talking Acid",   "The vowel filter: the line seems to speak",              pTalkingAcid},
+    {"Evolving Line",  "EVOLVE changes it each loop, back every 4 loops",        pEvolvingLine},
+    {"Pumping Acid",   "Ducked on every beat, with sub and drive",               pPumpingAcid},
+    {"Polymeter",      "Accents every 5, slides every 7, chance and repeats",    pPolymeter},
+    {"Harmony Lead",   "A second voice a fifth up, echoes of two lengths",       pHarmonyLead},
 };
 static constexpr int kNumPresets = (int)(sizeof(kPresets) / sizeof(kPresets[0]));
 

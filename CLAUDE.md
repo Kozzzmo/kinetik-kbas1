@@ -40,3 +40,19 @@ View file `KinetikKBAS1-view.txt` ("skin zoom").
   `tests/update.cpp`. VST3 validator: 47/47.
 - CI workflow (`.github/workflows/build.yml`) adapted from KFX-8 (auval `aumu KBA1 Kntk`); every push to `main` builds and
   publishes the release `v$(cat VERSION)`.
+
+## Added in 0.2.0 (owner's choices from my proposals; everything except a MIDI arpeggiator)
+
+- Host params appended before the outputs: `pVOWEL pEVOLVE pEVORESET pPUMP pPUMPRATE pSUB pGROWL pHARMONY pDLYTIMER`.
+- Pattern: `locks[step][kLockParams]` (TUNE .. VOLUME; command `k p step param v`, `kc`), `prob` / `ratchet` / `tie` per step
+  (command `y p step prob ratchet tie`), `accLen` / `slideLen` (own row lengths, command `R`); `Bank::chain` (`C`).
+- Engine: `ep(i)` = the playing step's lock or the knob (`lockStep`); `playingPattern()` = EVOLVE's copy `evoPat` (mutated at
+  each loop by `mutate`, back to the written line every `evoResetLoops`, reset when the plugin bumps `edits`); ratchets
+  (`ratN`...), TIE (holds the gate), CHANCE (`urand`), polymetric accent / slide indices (`k % accRow()`), HARMONY (second
+  oscillator `harmonyNote`, same filter), GROWL (ladder cutoff x 2^(growl * osc)), VOWEL (3 SVF formants, vowel from the cutoff,
+  mixed with the ladder), SUB (square an octave down after the filter), PUMP (smoothstep duck per `kPumpBeats`, after the echo),
+  echo R TIME (`dTimeR`), the echo keeps running until its tail has died (`dlyQuiet`). CHAIN as KFX-8.
+- UI: panel pages VOICE / COLOR and FX / MOTION (`knobCount`, `knobParam`, `knobRect`), lock mode (right-click a STEP cell,
+  CLEAR LOCKS in the LCD), row lengths (drag the ACCENT / SLIDE labels), CHANCE/RPT row (drag = chance, right-click = repeats),
+  Shift+click = TIE, RANDOM menu (`randomize(0..2)`), CHAIN window, page 17-32 extends a 16-step pattern.
+- 18 factory presets (Talking Acid, Evolving Line, Pumping Acid, Polymeter, Harmony Lead added).

@@ -42,10 +42,10 @@ protected:
     {
         static const char* syms[kTotalParams] = {"tune", "wave", "cutoff", "reso", "envmod", "decay", "accent", "slide",
                                                  "ampdec", "drive", "tone", "dly_time", "dly_fb", "dly_mix", "volume",
-                                                 "tempo", "play", "pattern", "out_step", "out_gate", "out_pattern", "out_note"};
+                                                 "tempo", "play", "pattern", "vowel", "evolve", "evo_reset", "pump", "pump_rate", "sub", "growl", "harmony", "dly_time_r", "out_step", "out_gate", "out_pattern", "out_note"};
         static const char* names[kTotalParams] = {"Tune", "Wave", "Cutoff", "Resonance", "Env Mod", "Decay", "Accent", "Slide",
                                                   "Amp Decay", "Drive", "Tone", "Delay Time", "Delay Feedback", "Delay Mix", "Volume",
-                                                  "Internal Tempo", "Internal Play", "Pattern", "Play Step", "Gate", "Playing Pattern", "Note"};
+                                                  "Internal Tempo", "Internal Play", "Pattern", "Vowel", "Evolve", "Evolve Reset", "Pump", "Pump Rate", "Sub", "Growl", "Harmony", "Delay Time R", "Play Step", "Gate", "Playing Pattern", "Note"};
         static_assert(sizeof(syms) / sizeof(syms[0]) == kTotalParams && sizeof(names) / sizeof(names[0]) == kTotalParams, "tables");
         p.hints = kParameterIsAutomatable;
         p.name = names[index]; p.shortName = names[index]; p.symbol = syms[index];
@@ -149,7 +149,8 @@ protected:
             if (lk.owns_lock()) {
                 const uint32_t d = dirty.exchange(0);
                 for (int p = 0; p < kPatterns; ++p) if (d & (1u << p)) engine->bank.patterns[p] = master->patterns[p];
-                if (d & kGlobBit) engine->bank.glob = master->glob;
+                if (d & 0xFFFFu) ++engine->edits;
+                if (d & kGlobBit) { engine->bank.glob = master->glob; engine->bank.chain = master->chain; }
             }
         }
         notes.clear();
