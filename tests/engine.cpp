@@ -175,6 +175,44 @@ int main()
         double dl = 0, dr = 0; for (int i = 0; i < 48000; ++i) { dl += L[i] * L[i]; dr += R[i] * R[i]; }
         check(std::fabs(dl - dr) > 0.05 * std::max(dl, dr), "R TIME: the right echo has its own time");
     }
+    // SATURATE: five models, each changes the sound at a sane level
+    {
+        auto base = [](Engine& e) { Pattern& P = e.bank.patterns[0]; for (int i = 0; i < 16; ++i) { P.on[i] = 1; P.note[i] = 40 + (i % 3) * 7; } e.param[pAMPDEC] = 127; };
+        auto plain = render(base, 24000);
+        int ok = 0;
+        for (int t = 0; t < kSatTypes; ++t) {
+            auto y = render([&](Engine& e) { base(e); e.param[pSAT] = 100; e.param[pSATTYPE] = t * 25.6f + 12.f; }, 24000);
+            bool fin = true; for (float v : y) if (!std::isfinite(v) || std::fabs(v) > 1.2f) fin = false;
+            double d = 0; for (int i = 0; i < 24000; ++i) d += (y[i] - plain[i]) * (y[i] - plain[i]);
+            const double ratio = rms(y, 2000, 24000) / std::max(1e-9, rms(plain, 2000, 24000));
+            std::printf("     %s: level x%.2f\n", kSatNames[t], ratio);
+            if (fin && std::sqrt(d / 24000) > 0.01 && ratio > 0.4 && ratio < 2.5) ++ok;
+        }
+        check(ok == kSatTypes, "SATURATE: every model changes the sound, finite, level within -8 / +8 dB");
+    }
+    // REC: live notes are written to the nearest step (accent from the velocity, legato = slide + ties, long note = ties)
+    {
+        Engine* E = nullptr;
+        const int st = 6000;   // one 16th at 120 BPM
+        render([](Engine& e) { e.recording = true; }, st * 10,
+               {{(uint32_t)(st + 50), 50, 110, true}, {(uint32_t)(st + 2000), 50, 0, false},
+                {(uint32_t)(st * 3 - 200), 52, 90, true}, {(uint32_t)(st * 5 + 100), 55, 90, true},
+                {(uint32_t)(st * 5 + 300), 52, 0, false}, {(uint32_t)(st * 8), 55, 0, false}}, &E);
+        RecEvent ev; int notes = 0, slides = 0, ties = 0; bool where = true;
+        while (E->popRec(ev)) {
+            if (ev.kind == 0) { ++notes; if (!((ev.a == 1 && ev.note == 50 && ev.accent) || (ev.a == 3 && ev.note == 52 && !ev.accent) || (ev.a == 5 && ev.note == 55))) where = false; }
+            else if (ev.kind == 1) { ++slides; if (ev.a != 4) where = false; }
+            else { ++ties; if (ev.a != 4 && ev.a != 6 && ev.a != 7) where = false; }
+        }
+        std::printf("     notes %d slides %d ties %d\n", notes, slides, ties);
+        check(notes == 3 && slides == 1 && ties == 3 && where, "REC: notes on the nearest steps, accent, legato slide, held note tied");
+        auto off = render([](Engine& e) { e.recording = false; }, st * 4, {{(uint32_t)(st + 50), 50, 110, true}}, &E);
+        check(!E->popRec(ev), "REC off: nothing recorded");
+        auto clk = render([](Engine& e) { e.recording = true; }, st * 4);
+        check(rms(clk, 0, 1000) > 0.01, "CLICK: heard while recording");
+        auto noclk = render([](Engine& e) { e.recording = true; e.click.enabled = false; }, st * 4);
+        check(rms(noclk, 0, 1000) < 1e-4, "CLICK off: silent");
+    }
     std::printf(fails ? "%d failures\n" : "all passed\n", fails);
     return fails ? 1 : 0;
 }

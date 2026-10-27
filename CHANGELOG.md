@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- REC: with the pattern playing, the notes played on a MIDI keyboard are written into it (nearest step; velocity 100+ =
+  accent; a note played while the previous one is held = slide; a long note = tied steps). One UNDO per take.
+  CLICK: a metronome while recording (on / off).
+- SATURATE + SAT TYPE (COLOR page): TUBE, TAPE, DIODE, FUZZ and FOLD saturation after the filter, oversampled,
+  level matched.
+
 ## 0.2.0
 
 - Per-step locks: right-click a step, then turn any sound knob (filter, delay send, drive...) for that step only.

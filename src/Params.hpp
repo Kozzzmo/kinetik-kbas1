@@ -18,6 +18,7 @@ enum Param {
     pTEMPO, pPLAY, pPATTERN,
     pVOWEL, pEVOLVE, pEVORESET, pPUMP, pPUMPRATE,                          // 0.2: vowel filter, line mutation, pump
     pSUB, pGROWL, pHARMONY, pDLYTIMER,                                     // 0.2: sub, filter FM, second voice, right echo time
+    pSAT, pSATTYPE,                                                        // 0.3: saturator after the filter
     pOUT_STEP, pOUT_GATE, pOUT_PATTERN, pOUT_NOTE,
     kTotalParams
 };
@@ -27,11 +28,11 @@ static constexpr uint8_t kNoLock = 255;
 static const char* const kParamNames[kTotalParams] = {
     "TUNE", "WAVE", "CUTOFF", "RESO", "ENV MOD", "DECAY", "ACCENT", "SLIDE",
     "AMP DECAY", "DRIVE", "TONE", "DELAY TIME", "FEEDBACK", "DELAY MIX", "VOLUME",
-    "TEMPO", "PLAY", "PATTERN", "VOWEL", "EVOLVE", "EVO RESET", "PUMP", "PUMP RATE", "SUB", "GROWL", "HARMONY", "R TIME", "STEP", "GATE", "PLAYING", "NOTE"};
+    "TEMPO", "PLAY", "PATTERN", "VOWEL", "EVOLVE", "EVO RESET", "PUMP", "PUMP RATE", "SUB", "GROWL", "HARMONY", "R TIME", "SATURATE", "SAT TYPE", "STEP", "GATE", "PLAYING", "NOTE"};
 static const float kParamDefaults[kTotalParams] = {
     64, 0, 40, 80, 70, 50, 70, 40,
     127, 0, 80, 64, 50, 0, 100,
-    120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0};
+    120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0};
 
 static const double kDelTime[8] = {0.125, 1.0 / 6.0, 0.25, 1.0 / 3.0, 0.375, 0.5, 0.75, 1.0};
 static const char* const kDelTimeNames[8] = {"1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8", "1/8D", "1/4"};
@@ -64,6 +65,11 @@ static const double kPumpBeats[4] = {1.0, 0.5, 2.0, 4.0};
 static const char* const kPumpNames[4] = {"1/4", "1/8", "1/2", "1 BAR"};
 inline int pumpBin(float v) { const int b = (int)(v / 32.f); return b < 0 ? 0 : (b > 3 ? 3 : b); }
 
+// SATURATE models (after the filter, 2x oversampled)
+static constexpr int kSatTypes = 5;
+static const char* const kSatNames[kSatTypes] = {"TUBE", "TAPE", "DIODE", "FUZZ", "FOLD"};
+inline int satBin(float v) { const int b = (int)(v / 128.f * kSatTypes); return b < 0 ? 0 : (b >= kSatTypes ? kSatTypes - 1 : b); }
+
 inline std::string paramText(int p, float v)
 {
     char b[32];
@@ -86,6 +92,8 @@ inline std::string paramText(int p, float v)
     case pPUMPRATE: return kPumpNames[pumpBin(v)];
     case pSUB: case pGROWL: if (v < 0.5f) return "OFF"; std::snprintf(b, sizeof(b), "%d%%", (int)std::lround(v / 127.f * 100.f)); return b;
     case pHARMONY: return kHarmNames[harmBin(v)];
+    case pSAT: if (v < 0.5f) return "OFF"; std::snprintf(b, sizeof(b), "%d%%", (int)std::lround(v / 127.f * 100.f)); return b;
+    case pSATTYPE: return kSatNames[satBin(v)];
     case pDLYTIMER: { const int r = delayRBin(v); return r < 0 ? "= LEFT" : kDelTimeNames[r]; }
     default: std::snprintf(b, sizeof(b), "%d", (int)std::lround(v)); return b;
     }

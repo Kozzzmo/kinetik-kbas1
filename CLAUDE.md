@@ -56,3 +56,13 @@ View file `KinetikKBAS1-view.txt` ("skin zoom").
   CLEAR LOCKS in the LCD), row lengths (drag the ACCENT / SLIDE labels), CHANCE/RPT row (drag = chance, right-click = repeats),
   Shift+click = TIE, RANDOM menu (`randomize(0..2)`), CHAIN window, page 17-32 extends a 16-step pattern.
 - 18 factory presets (Talking Acid, Evolving Line, Pumping Acid, Polymeter, Harmony Lead added).
+
+## Added in 0.3.0
+
+- REC (header, `recBtn`) + CLICK (`Click.hpp`, copied from KDSP-16): the UI reaches the plug-in directly (`BassDirect.hpp`,
+  `DISTRHO_PLUGIN_WANT_DIRECT_ACCESS`); `Engine::recordOn / recordOff` push `RecEvent`s (0 note + accent index, 1 slide
+  index, 2 TIE step) into a lock-free queue, the UI's `pollRecorded` turns them into `o n y a l` commands (one undo per
+  take, taken when REC is armed). A recorded step that has not started yet is skipped by the sequencer (`recSkipK`): the
+  held key plays it.
+- `pSAT pSATTYPE` (appended before the outputs): `Saturator.hpp` (TUBE TAPE DIODE FUZZ FOLD, 2x oversampled with 4-pole
+  filters, level matched by an RMS follower), after SUB, before DRIVE. COLOR page = 6 knobs.

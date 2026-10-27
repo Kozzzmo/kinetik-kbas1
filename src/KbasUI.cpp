@@ -1,5 +1,7 @@
 // Kinetik KBAS-1 — user interface (NanoVG)
 #include "DistrhoUI.hpp"
+#include "DistrhoPlugin.hpp"
+#include "BassDirect.hpp"
 #include "Bank.hpp"
 #include "Presets.hpp"
 #include "Skins.hpp"
@@ -61,7 +63,10 @@ public:
         licInfo = lic::findInstalled("KBAS-1");
         updater.reset(new upd::Checker("KBAS-1", KN_VERSION, "https://github.com/Kozzzmo/kinetik-kbas1/releases/latest/download/update.txt"));
         updater->check(false);
+        if (void* p = getPluginInstancePointer()) direct = dynamic_cast<BassDirect*>(static_cast<Plugin*>(p));
+        if (direct) direct->setRecording(false);
     }
+    ~KbasUI() override { if (direct) direct->setRecording(false); }
 
     // ------------------------------------------------------------------ skins / view
     static std::string viewFile()
@@ -299,6 +304,8 @@ protected:
 
     // ------------------------------------------------------------------ layout
     R logoArea() const { return {12.f, 4.f, 372.f, 50.f}; }
+    R recBtn() const { return {396.f, 9.f, 66.f, 40.f}; }
+    R clickBtn() const { return {466.f, 9.f, 62.f, 40.f}; }
     R patLenBox() const { return {536.f, 9.f, 76.f, 40.f}; }
     R swingBox() const { return {618.f, 9.f, 76.f, 40.f}; }
     R patBox() const { return {700.f, 9.f, 130.f, 40.f}; }
@@ -339,20 +346,20 @@ protected:
     R vTab(int i) const { return {1012.f + i * 76.f, 62.f, 72.f, 18.f}; }
     R fTab(int i) const { return {560.f + i * 76.f, 246.f, 72.f, 18.f}; }
     // knobs shown now (two pages in each panel)
-    int knobCount() const { return (vPage ? 4 : 8) + (fPage ? 4 : 8); }
+    int knobCount() const { return (vPage ? 6 : 8) + (fPage ? 4 : 8); }
     int knobParam(int k) const
     {
         static const int voice[8] = {pTUNE, pWAVE, pCUTOFF, pRESO, pENVMOD, pDECAY, pACCENT, pSLIDE};
-        static const int extra[4] = {pVOWEL, pGROWL, pSUB, pHARMONY};
+        static const int extra[6] = {pVOWEL, pGROWL, pSUB, pHARMONY, pSAT, pSATTYPE};
         static const int fx[8] = {pAMPDEC, pDRIVE, pTONE, pDLYTIME, pDLYTIMER, pDLYFB, pDLYMIX, pVOLUME};
         static const int mod[4] = {pEVOLVE, pEVORESET, pPUMP, pPUMPRATE};
-        const int nv = vPage ? 4 : 8;
-        if (k < nv) return vPage ? extra[k & 3] : voice[k & 7];
+        const int nv = vPage ? 6 : 8;
+        if (k < nv) return vPage ? extra[k % 6] : voice[k & 7];
         k -= nv; return fPage ? mod[k & 3] : fx[k & 7];
     }
     R knobRect(int k) const
     {
-        const int nv = vPage ? 4 : 8;
+        const int nv = vPage ? 6 : 8;
         if (k < nv) return vKnob(k);
         k -= nv; return {22.f + k * 86.f, 262.f, 84.f, 120.f};
     }
@@ -440,6 +447,17 @@ protected:
         std::snprintf(b, sizeof(b), "%.1f", gp(pTEMPO));
         number(tb.x + 70, tb.cy() + 1, b, 20.f, th->lcdText, ALIGN_RIGHT | ALIGN_MIDDLE);
         label(tb.x + 75, tb.cy() + 2, "BPM", 10.f, th->lcdDim, ALIGN_LEFT | ALIGN_MIDDLE);
+        {   // REC (live notes into the pattern) and the metronome heard while recording
+            const R rb = recBtn();
+            const bool live = rec && running;
+            if (rec) box(rb, live ? Color(220, 30, 45) : th->selFill); else { box(rb, th->btnFill); frame(rb, th->btnEdge); }
+            beginPath(); circle(rb.x + 17, rb.cy(), 5.f); fillColor(rec ? (live ? Color(255, 255, 255) : th->selText) : Color(220, 30, 45)); fill();
+            label(rb.x + 41, rb.cy() + 1, "REC", 12.f, rec ? (live ? Color(255, 255, 255) : th->selText) : th->btnText, ALIGN_CENTER | ALIGN_MIDDLE, th->fontButton);
+            const R cb = clickBtn();
+            box(cb, th->btnFill); frame(cb, th->btnEdge);
+            label(cb.cx(), cb.y + 12, "CLICK", 9.f, th->dim);
+            label(cb.cx(), cb.y + 28, clickOn ? "ON" : "OFF", 10.5f, clickOn ? accentInk() : th->text);
+        }
         const R sk = skinBtn();
         box(sk, th->btnFill); frame(sk, th->btnEdge);
         label(sk.cx(), sk.y + 12, "SKIN / SIZE", 9.f, th->dim);
@@ -479,14 +497,14 @@ protected:
         beginPath(); rect(g.x + g.w * fc, g.y, std::max(1.f, g.w * std::min(env, 1.f - fc)), g.h); fillColor(withAlpha(th->lcdText, 0.10f)); fill();
         curve(std::min(1.f, fc + env), withAlpha(th->lcdDim, 0.8f), 1.2f);
         curve(fc, th->lcdText, 2.f);
-        const int nv = vPage ? 4 : 8;
+        const int nv = vPage ? 6 : 8;
         for (int k = 0; k < nv; ++k) { const int p = knobParam(k); drawKnob(knobRect(k), kv(p) / 127.f, kParamNames[p], paramText(p, kv(p)), isLocked(p), drag == dkKnob && dragIndex == p); }
         button(vTab(0), "VOICE", vPage == 0, 9.f); button(vTab(1), "COLOR", vPage == 1, 9.f);
     }
     void drawFxPatterns()
     {
         panelBox({14.f, 242.f, 700.f, 148.f});
-        for (int k = vPage ? 4 : 8; k < knobCount(); ++k) { const int p = knobParam(k); drawKnob(knobRect(k), kv(p) / 127.f, kParamNames[p], paramText(p, kv(p)), isLocked(p), drag == dkKnob && dragIndex == p, 24.f, 40.f, 84.f, 102.f); }
+        for (int k = vPage ? 6 : 8; k < knobCount(); ++k) { const int p = knobParam(k); drawKnob(knobRect(k), kv(p) / 127.f, kParamNames[p], paramText(p, kv(p)), isLocked(p), drag == dkKnob && dragIndex == p, 24.f, 40.f, 84.f, 102.f); }
         button(fTab(0), "FX", fPage == 0, 9.f); button(fTab(1), "MOTION", fPage == 1, 9.f);
         panelBox({722.f, 242.f, 444.f, 148.f});
         label(736, 258, "PATTERNS", 10.5f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
@@ -673,6 +691,7 @@ protected:
         v[pDLYTIME] = (float)((int)(urand() * 8) * 16 + 8); v[pDLYFB] = rr(20, 90); v[pDLYMIX] = urand() < 0.5f ? 0.f : rr(15, 70);
         v[pVOWEL] = urand() < 0.2f ? rr(30, 110) : 0.f; v[pGROWL] = urand() < 0.2f ? rr(15, 80) : 0.f; v[pSUB] = urand() < 0.3f ? rr(30, 90) : 0.f;
         v[pHARMONY] = urand() < 0.15f ? (float)(int)(urand() * 7) * 18.3f + 9.f : 0.f; v[pDLYTIMER] = urand() < 0.25f ? rr(8, 127) : 0.f;
+        v[pSAT] = urand() < 0.35f ? rr(15, 100) : 0.f; v[pSATTYPE] = (float)(int)(urand() * kSatTypes) * 25.6f + 12.f;
     }
     void randomPattern(Pattern& P)
     {
@@ -1093,6 +1112,8 @@ protected:
         if (lockMode() && lockClearBtn().in(x, y)) return "Remove every lock of this step.";
         if (patLenBox().in(x, y)) return "Pattern length in steps (1-32). Drag or scroll.";
         if (swingBox().in(x, y)) return "Swing: delays every second 16th (50% = straight). Drag or scroll.";
+        if (recBtn().in(x, y)) return "REC: while the pattern plays, the notes you play on a MIDI keyboard are written into it (nearest step; velocity 100+ = accent; a note played while another is held = slide; a long note = tied steps). UNDO removes a take.";
+        if (clickBtn().in(x, y)) return "CLICK: a metronome on every beat while REC records. Click to turn it on or off.";
         if (playBtn().in(x, y)) return "Internal play when your music software is stopped (KBAS-1 follows its transport when it plays).";
         if (tempoBox().in(x, y)) return "Internal tempo. Drag or scroll.";
         for (int i = 0; i < kPatterns; ++i) if (patBtn(i).in(x, y)) return "Choose the pattern (while playing it starts at the end of the current one).";
@@ -1176,6 +1197,8 @@ protected:
         }
         if (logoArea().in(x, y)) { overlay = ovUpdate; repaint(); return true; }
         if (skinBtn().in(x, y)) { if (right) setSkin((skin + 1) % kNumThemes, true); else overlay = ovSkins; repaint(); return true; }
+        if (recBtn().in(x, y)) { if (!rec) snapshot("record"); setRec(!rec); repaint(); return true; }
+        if (clickBtn().in(x, y)) { clickOn = !clickOn; if (direct) direct->setClick(clickOn); else setState("cmd", clickOn ? "click 1" : "click 0"); repaint(); return true; }
         if (playBtn().in(x, y)) { setParamGesture(pPLAY, gp(pPLAY) > 0.5f ? 0.f : 1.f); repaint(); return true; }
         if (tempoBox().in(x, y)) { drag = dkTempo; dragIndex = pTEMPO; dragY = y; dragStart = gp(pTEMPO); editParameter(pTEMPO, true); return true; }
         if (patLenBox().in(x, y)) { drag = dkPatLen; dragY = y; dragStart = pat().length; return true; }
@@ -1335,6 +1358,7 @@ protected:
             if (!tipText.empty()) { tipShown = true; repaint(); } else tipNone = true;
         }
         flushPv();
+        pollRecorded();
         if (updater && (int)updater->getState() != updLastState) { updLastState = (int)updater->getState(); repaint(); }
         if (!patMsg.empty() && nowSec() > patMsgUntil) { patMsg.clear(); repaint(); }
         if (bank->chain.active() && drag == dkNone) {          // in a chain, the view follows the music
@@ -1345,6 +1369,40 @@ protected:
     }
 
 private:
+    // ------------------------------------------------------------------ live recording
+    BassDirect* direct = nullptr;
+    bool rec = false, clickOn = true;
+    void setRec(bool on)
+    {
+        rec = on;
+        if (direct) direct->setRecording(on);
+        else setState("cmd", on ? "rec 1" : "rec 0");
+    }
+    // notes played on a MIDI keyboard while recording are written into the pattern here (one command batch)
+    void pollRecorded()
+    {
+        if (!direct) return;
+        std::string c; char b[96];
+        int kind, pt, a, bb, note; bool acc;
+        while (direct->popRecorded(kind, pt, a, bb, note, acc)) {
+            if (pt < 0 || pt >= kPatterns || a < 0 || a >= kSteps) continue;
+            const Pattern& P = bank->patterns[pt];
+            if (kind == 0) {
+                std::snprintf(b, sizeof(b), "o %d %d 1\nn %d %d %d\ny %d %d %d %d 0\n", pt, a, pt, a, note, pt, a, P.prob[a], P.ratchet[a]); c += b;
+                if (bb >= 0 && bb < kSteps) { std::snprintf(b, sizeof(b), "a %d %d %d\n", pt, bb, acc ? 1 : 0); c += b; }
+            } else if (kind == 1) { std::snprintf(b, sizeof(b), "l %d %d 1\n", pt, a); c += b; }
+            else { std::snprintf(b, sizeof(b), "y %d %d %d %d 1\n", pt, a, P.prob[a], P.ratchet[a]); c += b; }
+        }
+        if (!c.empty()) { c.pop_back(); recLines(c); repaint(); }
+    }
+    // like sendLines, without a new undo step for every note (REC took one when it was armed)
+    void recLines(const std::string& c)
+    {
+        size_t st = 0;
+        while (st < c.size()) { size_t e = c.find('\n', st); if (e == std::string::npos) e = c.size(); applyCommand(*bank, c.substr(st, e - st).c_str()); st = e + 1; }
+        setState("cmd", c.c_str());
+    }
+
     float values[kTotalParams];
     std::unique_ptr<Bank> bank;
     float sx = 1.f;

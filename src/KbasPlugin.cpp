@@ -2,6 +2,7 @@
 #include "DistrhoPlugin.hpp"
 #include "Engine.hpp"
 #include "License.hpp"
+#include "BassDirect.hpp"
 #include <atomic>
 #include <cmath>
 #include <mutex>
@@ -13,9 +14,20 @@ using namespace kn;
 
 static constexpr uint32_t kGlobBit = 1u << 16;
 
-class KbasPlugin : public Plugin
+class KbasPlugin : public Plugin, public BassDirect
 {
 public:
+    // ---- BassDirect (UI thread) ----
+    bool popRecorded(int& kind, int& pattern, int& a, int& b, int& note, bool& accent) override
+    {
+        RecEvent e;
+        if (!engine->popRec(e)) return false;
+        kind = e.kind; pattern = e.pattern; a = e.a; b = e.b; note = e.note; accent = e.accent != 0;
+        return true;
+    }
+    void setRecording(bool on) override { recFlag.store(on); }
+    void setClick(bool on) override { clickFlag.store(on); }
+
     KbasPlugin()
         : Plugin(kTotalParams, 0, 3)
     {
@@ -42,10 +54,10 @@ protected:
     {
         static const char* syms[kTotalParams] = {"tune", "wave", "cutoff", "reso", "envmod", "decay", "accent", "slide",
                                                  "ampdec", "drive", "tone", "dly_time", "dly_fb", "dly_mix", "volume",
-                                                 "tempo", "play", "pattern", "vowel", "evolve", "evo_reset", "pump", "pump_rate", "sub", "growl", "harmony", "dly_time_r", "out_step", "out_gate", "out_pattern", "out_note"};
+                                                 "tempo", "play", "pattern", "vowel", "evolve", "evo_reset", "pump", "pump_rate", "sub", "growl", "harmony", "dly_time_r", "saturate", "sat_type", "out_step", "out_gate", "out_pattern", "out_note"};
         static const char* names[kTotalParams] = {"Tune", "Wave", "Cutoff", "Resonance", "Env Mod", "Decay", "Accent", "Slide",
                                                   "Amp Decay", "Drive", "Tone", "Delay Time", "Delay Feedback", "Delay Mix", "Volume",
-                                                  "Internal Tempo", "Internal Play", "Pattern", "Vowel", "Evolve", "Evolve Reset", "Pump", "Pump Rate", "Sub", "Growl", "Harmony", "Delay Time R", "Play Step", "Gate", "Playing Pattern", "Note"};
+                                                  "Internal Tempo", "Internal Play", "Pattern", "Vowel", "Evolve", "Evolve Reset", "Pump", "Pump Rate", "Sub", "Growl", "Harmony", "Delay Time R", "Saturate", "Saturator Type", "Play Step", "Gate", "Playing Pattern", "Note"};
         static_assert(sizeof(syms) / sizeof(syms[0]) == kTotalParams && sizeof(names) / sizeof(names[0]) == kTotalParams, "tables");
         p.hints = kParameterIsAutomatable;
         p.name = names[index]; p.shortName = names[index]; p.symbol = syms[index];
@@ -120,6 +132,8 @@ protected:
                 const size_t len = e ? (size_t)(e - s) : std::strlen(s);
                 line.assign(s, len);
                 if (line.rfind("pv ", 0) == 0) { unsigned i = 0; float v = 0.f; if (std::sscanf(line.c_str() + 3, "%u %f", &i, &v) == 2) uiEdit(i, v); }
+                else if (line.rfind("rec ", 0) == 0) recFlag.store(std::atoi(line.c_str() + 4) != 0);
+                else if (line.rfind("click ", 0) == 0) clickFlag.store(std::atoi(line.c_str() + 6) != 0);
                 else if (line == "lic") licensed.store(lic::findInstalled(kProductCode).valid);
                 else if (line.rfind("key ", 0) == 0) {          // on-screen keyboard: key <note> <velocity> (0 = off)
                     int n = 60, v = 0; std::sscanf(line.c_str() + 4, "%d %d", &n, &v);
@@ -153,6 +167,8 @@ protected:
                 if (d & kGlobBit) { engine->bank.glob = master->glob; engine->bank.chain = master->chain; }
             }
         }
+        engine->recording = recFlag.load();
+        engine->click.enabled = clickFlag.load();
         notes.clear();
         while (keyR.load() != keyW.load() && notes.size() < 256) {
             const int r = keyR.load(); const uint32_t k = keyQ[r]; keyR.store((r + 1) % 32);
@@ -193,7 +209,7 @@ private:
     std::unique_ptr<Bank> master;
     mutable std::mutex masterMutex;
     std::atomic<uint32_t> dirty{0};
-    std::atomic<bool> licensed{false};
+    std::atomic<bool> licensed{false}, recFlag{false}, clickFlag{true};
     uint32_t keyQ[32] = {}; std::atomic<int> keyW{0}, keyR{0};
     std::vector<NoteIn> notes;
     uint64_t demoPos = 0; float demoGain = 1.f;
