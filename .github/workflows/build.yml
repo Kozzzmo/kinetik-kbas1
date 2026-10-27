@@ -1,0 +1,244 @@
+name: build
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# Optional signing secrets (Settings -> Secrets and variables -> Actions). Without them the builds are
+# unsigned (ad-hoc on macOS) and everything else still works.
+#   macOS : MACOS_CERTIFICATE (base64 .p12 with "Developer ID Application" + "Developer ID Installer"),
+#           MACOS_CERTIFICATE_PASSWORD, MACOS_SIGN_APP ("Developer ID Application: Name (TEAMID)"),
+#           MACOS_SIGN_INSTALLER ("Developer ID Installer: Name (TEAMID)"),
+#           APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD (app-specific password, for notarization)
+#   Windows: WINDOWS_CERTIFICATE (base64 .pfx), WINDOWS_CERTIFICATE_PASSWORD
+#   Updates: KINETIK_UPDATE_KEY (hex Ed25519 seed): signs dist/update.txt, which installed plugins read to offer
+#            the new version. Without it no manifest is published and installed copies see no update.
+
+jobs:
+  macos:
+    runs-on: macos-14
+    env:
+      HAS_MAC_CERT: ${{ secrets.MACOS_CERTIFICATE != '' }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Fetch and patch DPF
+        run: ./scripts/setup.sh
+      - name: "Build (universal: Apple Silicon + Intel)"
+        run: make universal -j4
+      - name: Import the Developer ID certificates
+        if: env.HAS_MAC_CERT == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KC=$RUNNER_TEMP/sign.keychain-db; KP=$(uuidgen)
+          echo "$MACOS_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security create-keychain -p "$KP" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KP" "$KC"
+          security import $RUNNER_TEMP/cert.p12 -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KP" "$KC"
+          security list-keychain -d user -s "$KC"
+          rm $RUNNER_TEMP/cert.p12
+      - name: Code signing
+        env:
+          MACOS_SIGN_APP: ${{ secrets.MACOS_SIGN_APP }}
+        run: |
+          for b in bin/*.vst3 bin/*.component bin/*.clap; do
+            [ -e "$b" ] || continue
+            if [ "$HAS_MAC_CERT" = "true" ]; then
+              codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGN_APP" "$b"
+            else
+              codesign --force --deep --sign - "$b"
+            fi
+          done
+          echo "::notice title=architectures::$(lipo -archs bin/KinetikKBAS1.vst3/Contents/MacOS/KinetikKBAS1)"
+          echo "::notice title=signing::$([ "$HAS_MAC_CERT" = "true" ] && echo 'Developer ID' || echo 'ad-hoc (no certificate configured)')"
+      - name: Validate the Audio Unit (auval)
+        continue-on-error: true
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R bin/KinetikKBAS1.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 2
+          if auval -v aumu KBA1 Kntk > auval.txt 2>&1; then
+            echo "::notice title=auval::AU VALIDATION SUCCEEDED"
+          else
+            echo "::warning title=auval::$(tail -5 auval.txt | tr '\n' ' ')"
+          fi
+      - name: Installer package
+        env:
+          MACOS_SIGN_INSTALLER: ${{ secrets.MACOS_SIGN_INSTALLER }}
+        run: |
+          SIGN=""; [ "$HAS_MAC_CERT" = "true" ] && SIGN="$MACOS_SIGN_INSTALLER"
+          sh packaging/macos/make-pkg.sh KinetikKBAS1 "Kinetik KBAS-1" audio.kinetik.kbas1 "$(cat VERSION)" Kinetik-KBAS1-macOS.pkg "$SIGN"
+      - name: Notarize
+        if: env.HAS_MAC_CERT == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit Kinetik-KBAS1-macOS.pkg --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple Kinetik-KBAS1-macOS.pkg
+          echo "::notice title=notarization::installer notarized and stapled"
+      - name: Package
+        run: |
+          mkdir -p pkg
+          cp -R bin/*.vst3 bin/*.component bin/*.clap pkg/ 2>/dev/null || true
+          cp README.md EULA.txt THIRD_PARTY_NOTICES.txt pkg/
+          cd pkg && zip -qry ../Kinetik-KBAS1-macOS.zip .
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Kinetik-KBAS1-macOS
+          path: |
+            Kinetik-KBAS1-macOS.zip
+            Kinetik-KBAS1-macOS.pkg
+
+  windows:
+    runs-on: ubuntu-24.04
+    env:
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      SIGN_DESCRIPTION: "Kinetik KBAS-1"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install MinGW, NSIS and osslsigncode
+        timeout-minutes: 12
+        # the Ubuntu mirror sometimes hangs: give each attempt 3 minutes, try 3 times
+        run: |
+          for i in 1 2 3; do
+            if timeout 180 sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update &&
+               timeout 300 sudo apt-get -o Acquire::Retries=3 install -y mingw-w64 nsis osslsigncode; then exit 0; fi
+            echo "apt attempt $i failed, retrying"; sleep 10
+          done
+          exit 1
+      - name: Fetch and patch DPF
+        run: ./scripts/setup.sh
+      - name: Build (Windows x64)
+        run: make -j4 WINDOWS=true CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++
+      - name: Sign the plugins
+        run: sh scripts/sign-windows.sh bin/KinetikKBAS1.vst3/Contents/x86_64-win/KinetikKBAS1.vst3 bin/KinetikKBAS1.clap
+      - name: Installer
+        run: |
+          SIGNDEF=""; [ -n "$WINDOWS_CERTIFICATE" ] && SIGNDEF="-DSIGN"
+          makensis -NOCD -V2 $SIGNDEF -DPRODUCT="Kinetik KBAS-1" -DBIN=KinetikKBAS1 -DVERSION=$(cat VERSION) -DOUTFILE=Kinetik-KBAS1-Windows-Setup.exe packaging/windows/installer.nsi
+      - name: Package
+        run: |
+          mkdir -p pkg && cp -R bin/*.vst3 bin/*.clap pkg/ && cp README.md EULA.txt THIRD_PARTY_NOTICES.txt pkg/
+          cd pkg && zip -qry ../Kinetik-KBAS1-Windows.zip .
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Kinetik-KBAS1-Windows
+          path: |
+            Kinetik-KBAS1-Windows.zip
+            Kinetik-KBAS1-Windows-Setup.exe
+
+  windows-install-test:
+    # installs and uninstalls the real installer on Windows
+    needs: windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: Kinetik-KBAS1-Windows
+      - name: Update while a host has the plug-in loaded
+        shell: pwsh
+        run: |
+          $setup = (Get-Item .\Kinetik-KBAS1-Windows-Setup.exe).FullName
+          Start-Process -FilePath $setup -ArgumentList '/S' -Wait
+          $vst = "$env:CommonProgramFiles\VST3\KinetikKBAS1.vst3\Contents\x86_64-win\KinetikKBAS1.vst3"
+          Add-Type -Namespace W -Name K -MemberDefinition '[DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] public static extern IntPtr LoadLibraryW(string p);'
+          $h = [W.K]::LoadLibraryW($vst)
+          if ($h -eq [IntPtr]::Zero) { Write-Error "could not load the installed plug-in"; exit 1 }
+          $p = Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Error "silent update over a loaded plug-in failed (exit $($p.ExitCode))"; exit 1 }
+          if (!(Test-Path $vst)) { Write-Error "plug-in missing after the update"; exit 1 }
+          if (!(Get-ChildItem "$(Split-Path $vst)\*.old")) { Write-Error "the loaded plug-in was not moved aside"; exit 1 }
+          echo "::notice title=installer::silent update while the plug-in is loaded OK"
+      - name: Silent install, check, uninstall
+        shell: pwsh
+        run: |
+          Start-Process -FilePath .\Kinetik-KBAS1-Windows-Setup.exe -ArgumentList '/S' -Wait
+          $vst = "$env:CommonProgramFiles\VST3\KinetikKBAS1.vst3\Contents\x86_64-win\KinetikKBAS1.vst3"
+          $clap = "$env:CommonProgramFiles\CLAP\KinetikKBAS1.clap"
+          if (!(Test-Path $vst) -or !(Test-Path $clap)) { Write-Error "plugin files missing after install"; exit 1 }
+          $un = "$env:ProgramFiles\Kinetik\KinetikKBAS1\Uninstall.exe"
+          Start-Process -FilePath $un -ArgumentList '/S' -Wait
+          Start-Sleep -Seconds 5
+          if ((Test-Path $vst) -or (Test-Path $clap)) { Write-Error "plugin files left after uninstall"; exit 1 }
+          echo "::notice title=installer::install and uninstall OK"
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libdbus-1-dev libjack-jackd2-dev pkg-config
+      - name: Fetch and patch DPF
+        run: ./scripts/setup.sh
+      - name: Build
+        run: make -j4
+      - name: Run tests
+        run: |
+          gcc -O2 -c src/third_party/monocypher/monocypher.c -o /tmp/m1.o
+          gcc -O2 -c src/third_party/monocypher/monocypher-ed25519.c -o /tmp/m2.o
+          g++ -O2 -std=c++17 -Isrc tests/license.cpp /tmp/m1.o /tmp/m2.o -o /tmp/license-test && /tmp/license-test
+          g++ -O2 -std=c++17 -Isrc tests/update.cpp /tmp/m1.o /tmp/m2.o -o /tmp/update-test && /tmp/update-test
+          g++ -O2 -std=c++17 tests/engine.cpp -o /tmp/engine-test && /tmp/engine-test         # pitch, slides, accents, MIDI, patterns
+          g++ -O2 -std=c++17 tests/bank.cpp -o /tmp/bank-test && /tmp/bank-test               # pattern text format, commands, presets
+          ./scripts/check-shared.sh                                                  # files shared with the sister plug-in
+      - name: Package
+        run: |
+          mkdir -p pkg && cp -R bin/*.vst3 bin/*.clap pkg/ && cp README.md EULA.txt THIRD_PARTY_NOTICES.txt pkg/
+          cd pkg && zip -qry ../Kinetik-KBAS1-Linux.zip .
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Kinetik-KBAS1-Linux
+          path: Kinetik-KBAS1-Linux.zip
+
+  release:
+    # every push to main publishes (or refreshes) the release named after the VERSION file
+    if: github.ref == 'refs/heads/main'
+    needs: [macos, windows, windows-install-test, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read version
+        id: ver
+        run: echo "v=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Signed update manifest
+        env:
+          KINETIK_UPDATE_KEY: ${{ secrets.KINETIK_UPDATE_KEY }}
+        run: |
+          if [ -z "$KINETIK_UPDATE_KEY" ]; then echo "::warning title=updates::KINETIK_UPDATE_KEY not set, no update.txt published"; exit 0; fi
+          pip install --quiet cryptography
+          python3 tools/sign_update.py --product KBAS-1 --version ${{ steps.ver.outputs.v }} --repo kinetik-kbas1 \
+            --mac dist/Kinetik-KBAS1-macOS.pkg --win dist/Kinetik-KBAS1-Windows-Setup.exe \
+            --changelog CHANGELOG.md --out dist/update.txt
+          cat dist/update.txt
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: v${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: |
+            dist/*.zip
+            dist/*.pkg
+            dist/*.exe
+            dist/update.txt
+          generate_release_notes: false
+          body: |
+            Installers: Kinetik-KBAS1-macOS.pkg (macOS universal, VST3 + AU + CLAP) and Kinetik-KBAS1-Windows-Setup.exe (Windows 64-bit, VST3 + CLAP).
+            The zips contain the same plugins for manual installation (and the Linux build).
+            Installed copies offer new versions themselves: click the logo.

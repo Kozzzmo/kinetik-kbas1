@@ -1,0 +1,58 @@
+END USER LICENCE AGREEMENT - [BRAND] SOFTWARE (KDSP-16, KMSP-6, KFX-8, KBAS-1, KJNG-2, KDYN-10)
+DRAFT - to be completed and reviewed before sale. Version [DATE].
+
+This agreement is between you (the "User") and [LEGAL NAME], [ADDRESS], SIRET [NUMBER] (the
+"Publisher"). By installing or using the software, you accept this agreement. If you do not accept it,
+do not install the software; if you bought it, see section 9.
+
+1. Licence. The Publisher grants you a personal, non-exclusive, non-transferable licence to install and
+use the software you bought, on up to two (2) computers that you own or control, used by you alone. A
+licence is not a sale of the software: the Publisher keeps all rights not expressly granted.
+
+2. Your music is yours. You may use the software to create, record, perform, broadcast and sell your own
+music and sound recordings, commercially or not, without any royalty or credit owed to the Publisher.
+Factory presets and patterns may be used in your music but may not be redistributed as presets, patterns
+or sample packs.
+
+3. Demo version. Without a licence file, the software runs as a demo with limitations (for example,
+periodic silence). The demo is free for evaluation only.
+
+4. Licence files and keys. Your licence file or key is personal and contains your name and e-mail
+address. You must not share, publish or resell it. The Publisher may refuse support for, or revoke, a
+licence that has been published or obtained fraudulently.
+
+5. Restrictions. You must not: (a) copy the software except for installation and backup; (b) rent, lend,
+sublicense, resell or distribute the software or your licence; (c) remove or bypass the licence check or
+demo limitations; (d) reverse-engineer, decompile or disassemble the software, except to the extent the
+law allows it despite this restriction (in the EU, Article 6 of Directive 2009/24/EC).
+
+6. Transfer. You may transfer your licence once to another person only with the Publisher's written
+agreement; you must then delete all your copies.
+
+7. Updates and support. Updates may be provided free or for a fee at the Publisher's discretion. Support
+is given by e-mail at [SUPPORT E-MAIL] on a reasonable-effort basis.
+
+8. Third-party components. The software includes third-party components under their own licences,
+listed in THIRD_PARTY_NOTICES.txt; nothing in this agreement limits your rights under those licences.
+VST is a trademark of Steinberg Media Technologies GmbH. Audio Units is a trademark of Apple Inc.
+
+9. Statutory rights and warranty. If you are a consumer, you keep all the rights given to you by the law
+of your country, including the legal guarantee of conformity of digital content (in the EU, Directive
+2019/770) and, where applicable, the right of withdrawal. Apart from those rights, the software is
+provided "as is", without other warranty, and the Publisher does not guarantee that it will work with
+every computer, operating system or host application.
+
+10. Liability. To the extent permitted by law, the Publisher is not liable for indirect damage, loss of
+data, loss of profit or loss of recordings. Nothing in this agreement limits liability for death or
+personal injury, for fraud, gross negligence or wilful misconduct, or any liability that cannot be
+limited by law. Keep backups of your projects.
+
+11. Termination. This licence ends automatically if you breach it. You must then stop using the software
+and delete all copies. Sections 2, 5, 9, 10 and 12 survive termination.
+
+12. Law and disputes. This agreement is governed by French law. If you are a consumer, you also keep the
+protection of the mandatory rules of your country of residence. Before going to court, you may use the
+consumer mediator [MEDIATOR NAME AND WEBSITE] free of charge. Courts: those designated by law; for
+professionals, the courts of [CITY], France.
+
+Contact: [SUPPORT E-MAIL].
