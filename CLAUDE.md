@@ -3,9 +3,7 @@
 Kinetik KBAS-1 is a monophonic acid bass plug-in (VST3 / AU / CLAP, built with DPF and NanoVG): saw / square
 oscillator, resonant 4-pole filter, accents, slides, 32-step note sequencer. All DSP is original code. Family:
 KDSP-16 (`Kozzzmo/kinetik-kdsp16`), KMSP-6, KFX-8, KJNG-2, KDYN-10; next product KGRN-4 (granular).
-**Repository not created on GitHub yet** (owner: "construis en local d'abord"); it was built in
-`/home/claude/kinetik-kbas1` with `dpf` symlinked to the KDSP-16 checkout. The update URL already points to
-`Kozzzmo/kinetik-kbas1`.
+Repository: `Kozzzmo/kinetik-kbas1` (public, created 2026-10-27; first built locally in `/home/claude/kinetik-kbas1`, with `dpf` symlinked to the KDSP-16 checkout).
 
 ## Source map (`src/`)
 
@@ -40,5 +38,5 @@ View file `KinetikKBAS1-view.txt` ("skin zoom").
 - Tests: `tests/engine.cpp` (pitch, gate, slide, accent, resonance, live legato, transpose, pattern change),
   `tests/bank.cpp` (text round trip, commands, presets in their key, ACID GEN in the scale), `tests/license.cpp`,
   `tests/update.cpp`. VST3 validator: 47/47.
-- CI workflow (`.github/workflows/build.yml`) adapted from KFX-8 (auval `aumu KBA1 Kntk`); it runs once the repository
-  exists on GitHub with the same secrets (`KINETIK_UPDATE_KEY`...).
+- CI workflow (`.github/workflows/build.yml`) adapted from KFX-8 (auval `aumu KBA1 Kntk`); every push to `main` builds and
+  publishes the release `v$(cat VERSION)`.
