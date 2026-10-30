@@ -27,6 +27,8 @@ public:
     }
     void setRecording(bool on) override { recFlag.store(on); }
     void setClick(bool on) override { clickFlag.store(on); }
+    float lfoValue(int i) override { return i >= 0 && i < kLfos ? engine->lfoValue(i) : 0.f; }
+    void setChaosHold(bool on) override { engine->setChaosHold(on); }
 
     KbasPlugin()
         : Plugin(kTotalParams, 0, 3)
@@ -54,10 +56,18 @@ protected:
     {
         static const char* syms[kTotalParams] = {"tune", "wave", "cutoff", "reso", "envmod", "decay", "accent", "slide",
                                                  "ampdec", "drive", "tone", "dly_time", "dly_fb", "dly_mix", "volume",
-                                                 "tempo", "play", "pattern", "vowel", "evolve", "evo_reset", "pump", "pump_rate", "sub", "growl", "harmony", "dly_time_r", "saturate", "sat_type", "out_step", "out_gate", "out_pattern", "out_note"};
+                                                 "tempo", "play", "pattern", "vowel", "evolve", "evo_reset", "pump", "pump_rate", "sub", "growl", "harmony", "dly_time_r", "saturate", "sat_type",
+                                                 "low_cut", "lc_reso", "reverb", "rev_model", "rev_size", "rev_damp", "rev_pre", "rev_mod",
+                                                 "chaos_chance", "chaos_size", "chaos_len", "chaos_pitch", "chaos_fade", "chaos_rev", "chaos_mix",
+                                                 "lfo1_wave", "lfo1_rate", "lfo1_sync", "lfo1_depth", "lfo1_dest", "lfo1_trig",
+                                                 "lfo2_wave", "lfo2_rate", "lfo2_sync", "lfo2_depth", "lfo2_dest", "lfo2_trig", "out_step", "out_gate", "out_pattern", "out_note"};
         static const char* names[kTotalParams] = {"Tune", "Wave", "Cutoff", "Resonance", "Env Mod", "Decay", "Accent", "Slide",
                                                   "Amp Decay", "Drive", "Tone", "Delay Time", "Delay Feedback", "Delay Mix", "Volume",
-                                                  "Internal Tempo", "Internal Play", "Pattern", "Vowel", "Evolve", "Evolve Reset", "Pump", "Pump Rate", "Sub", "Growl", "Harmony", "Delay Time R", "Saturate", "Saturator Type", "Play Step", "Gate", "Playing Pattern", "Note"};
+                                                  "Internal Tempo", "Internal Play", "Pattern", "Vowel", "Evolve", "Evolve Reset", "Pump", "Pump Rate", "Sub", "Growl", "Harmony", "Delay Time R", "Saturate", "Saturator Type",
+                                                  "Low Cut", "Low Cut Resonance", "Reverb", "Reverb Model", "Reverb Size", "Reverb Damping", "Reverb Pre-Delay", "Reverb Mod",
+                                                  "Chaos Chance", "Chaos Size", "Chaos Length", "Chaos Pitch", "Chaos Fade", "Chaos Reverse", "Chaos Mix",
+                                                  "LFO 1 Wave", "LFO 1 Rate", "LFO 1 Sync", "LFO 1 Depth", "LFO 1 Destination", "LFO 1 Retrigger",
+                                                  "LFO 2 Wave", "LFO 2 Rate", "LFO 2 Sync", "LFO 2 Depth", "LFO 2 Destination", "LFO 2 Retrigger", "Play Step", "Gate", "Playing Pattern", "Note"};
         static_assert(sizeof(syms) / sizeof(syms[0]) == kTotalParams && sizeof(names) / sizeof(names[0]) == kTotalParams, "tables");
         p.hints = kParameterIsAutomatable;
         p.name = names[index]; p.shortName = names[index]; p.symbol = syms[index];

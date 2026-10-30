@@ -213,6 +213,60 @@ int main()
         auto noclk = render([](Engine& e) { e.recording = true; e.click.enabled = false; }, st * 4);
         check(rms(noclk, 0, 1000) < 1e-4, "CLICK off: silent");
     }
+    // 0.4: 64 steps, odd lengths (polyrhythm), LFOs, LOW CUT, reverb, CHAOS
+    {
+        Engine* E = nullptr;
+        render([](Engine& e) { Pattern& P = e.bank.patterns[0]; P.length = 64; P.on[50] = 1; }, 6000 * 52, {}, &E);
+        check(E->trigCount == 1, "64 steps: step 51 plays");
+        // a 5-step line against the bar: steps 1 and 6 (= its step 1 again) play, 4 notes in 16 steps
+        render([](Engine& e) { Pattern& P = e.bank.patterns[0]; P.length = 5; P.on[0] = 1; }, 6000 * 16, {}, &E);
+        check(E->trigCount == 4, "LENGTH 5: the line turns every 5 steps (4 notes in a bar)");
+    }
+    {
+        auto hf = [](const std::vector<float>& x, int a, int b) { double h = 0, t = 0; float prev = 0; for (int i = a; i < b; ++i) { const float d = x[i] - prev; prev = x[i]; h += d * d; t += x[i] * x[i]; } return h / std::max(t, 1e-12); };
+        auto held = [](Engine& e) { Pattern& P = e.bank.patterns[0]; for (int i = 0; i < 16; ++i) { P.on[i] = 1; P.note[i] = 45; P.slide[i] = 1; } e.param[pAMPDEC] = 127; e.param[pENVMOD] = 0; e.param[pCUTOFF] = 60; };
+        // LFO 1: square, 1/4 synced, full depth on CUTOFF: bright on the first half of each beat, dark on the second
+        auto lf = render([&](Engine& e) { held(e); e.param[pL1WAVE] = 50; e.param[pL1SYNC] = 127; e.param[pL1RATE] = 6 * 128.f / 14 + 2; e.param[pL1DEPTH] = 127; e.param[pL1DEST] = lfoDestKnob(1); }, 48000);
+        const double b1 = hf(lf, 2000, 10000), b2 = hf(lf, 14000, 22000);
+        char m2[160]; std::snprintf(m2, sizeof(m2), "LFO 1 square on CUTOFF: first half of the beat brighter (%.4f vs %.4f)", b1, b2);
+        check(b1 > b2 * 3.0, m2);
+        Engine* E = nullptr;
+        render([&](Engine& e) { held(e); e.param[pL2DEPTH] = 0; e.param[pL2DEST] = lfoDestKnob(13); e.param[pL2WAVE] = 30; }, 9000, {}, &E);
+        check(std::fabs(E->lfoValue(1)) > 0.01f && std::fabs(E->lfoValue(0)) < 1e-6f, "LFO 2 runs (negative depth), LFO 1 at depth 0 is silent");
+        // LOW CUT at 400 Hz: an A1 (110 Hz) loses most of its level; resonance makes it ring
+        auto plain = render(held, 24000);
+        auto cut = render([&](Engine& e) { held(e); e.param[pLOWCUT] = 1 + 126.f * std::log(20.f) / std::log(100.f); }, 24000);
+        std::snprintf(m2, sizeof(m2), "LOW CUT 400 Hz removes the low end (%.3f -> %.3f)", rms(plain, 2000, 22000), rms(cut, 2000, 22000));
+        check(rms(cut, 2000, 22000) < rms(plain, 2000, 22000) * 0.6, m2);
+        auto res = render([&](Engine& e) { held(e); e.param[pLOWCUT] = 1 + 126.f * std::log(20.f) / std::log(100.f); e.param[pLCRESO] = 127; }, 24000);
+        check(rms(res, 2000, 22000) > rms(cut, 2000, 22000) * 1.2, "LC RESO: the low cut rings at its frequency");
+        bool fin = true; for (float v : res) if (!std::isfinite(v) || std::fabs(v) > 1.01f) fin = false;
+        check(fin, "LOW CUT + RESO finite and limited");
+    }
+    {
+        // reverb: a single short note leaves a tail long after the gate closed; each model sounds different
+        auto one = [](Engine& e) { Pattern& P = e.bank.patterns[0]; P.on[0] = 1; P.note[0] = 48; P.length = 64; };
+        auto dry = render(one, 48000);
+        auto wet = render([&](Engine& e) { one(e); e.param[pREVERB] = 100; }, 48000);
+        char m2[160]; std::snprintf(m2, sizeof(m2), "REVERB: tail after the note (%.5f vs dry %.5f)", rms(wet, 20000, 40000), rms(dry, 20000, 40000));
+        check(rms(wet, 20000, 40000) > 0.003 && rms(dry, 20000, 40000) < 1e-4, m2);
+        int differ = 0; std::vector<float> prev;
+        for (int mdl = 0; mdl < 5; ++mdl) {
+            auto y = render([&](Engine& e) { one(e); e.param[pREVERB] = 100; e.param[pREVMODEL] = (float)reverbModelValue(mdl); }, 48000);
+            if (!prev.empty()) { double d = 0; for (int i = 8000; i < 48000; ++i) d += (y[i] - prev[i]) * (y[i] - prev[i]); if (std::sqrt(d / 40000) > 1e-3) ++differ; }
+            prev = y;
+        }
+        check(differ == 4, "REVERB: the five models sound different");
+        // CHAOS: chance 100 % with a 1/16 slice and full mix: the beat repeats what it grabbed (the output differs from the dry line)
+        auto line = [](Engine& e) { Pattern& P = e.bank.patterns[0]; for (int i = 0; i < 16; ++i) { P.on[i] = 1; P.note[i] = (uint8_t)(40 + (i % 5) * 3); } };
+        auto d2 = render(line, 96000 * 2);
+        auto g2 = render([&](Engine& e) { line(e); e.param[pGLCHANCE] = 127; e.param[pGLSIZE] = 60; e.param[pGLLEN] = 100; }, 96000 * 2);
+        double d = 0; for (size_t i = 0; i < d2.size(); ++i) d += (g2[i] - d2[i]) * (g2[i] - d2[i]);
+        bool fin = true; for (float v : g2) if (!std::isfinite(v) || std::fabs(v) > 1.01f) fin = false;
+        check(std::sqrt(d / d2.size()) > 0.01 && fin, "CHAOS: CHANCE 100 % repeats slices, finite");
+        // reverb / CHAOS off: the master block is transparent (same level as the dry voice before 0.4)
+        check(rms(d2, 0, 96000) > 0.02, "reverb / CHAOS off: the bass plays at its level");
+    }
     std::printf(fails ? "%d failures\n" : "all passed\n", fails);
     return fails ? 1 : 0;
 }

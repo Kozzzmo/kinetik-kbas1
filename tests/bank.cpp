@@ -23,7 +23,7 @@ int main()
 {
     static Bank a, b;
     a.initDefault();
-    check(serializeBank(a) == "KBAS1\nG 1 0 0\n", "empty bank is short");
+    check(serializeBank(a) == "KBAS1\nG 1 0 0 70\n", "empty bank is short");
     applyCommand(a, "P 3 24 62");
     applyCommand(a, "s 3 5 1 45 1 0");
     applyCommand(a, "l 3 6 1");
@@ -33,7 +33,7 @@ int main()
     check(a.patterns[3].on[5] && a.patterns[3].note[5] == 45 && a.patterns[3].accent[5] && !a.patterns[3].slide[5], "s sets a full step");
     check(a.patterns[3].slide[6] && a.patterns[3].note[6] == 50, "l / n set slide and note");
     check(applyCommand(a, "G 2 4 1") == kGlobTouched && a.glob.scale == 2 && a.glob.root == 4 && a.glob.transpose == 1, "G sets the key");
-    check(applyCommand(a, "P 99 1 1") == -1 && applyCommand(a, "s 0 40 1 1 1 1") == -1 && applyCommand(a, "zz") == -1, "bad commands are refused");
+    check(applyCommand(a, "P 99 1 1") == -1 && applyCommand(a, "s 0 70 1 1 1 1") == -1 && applyCommand(a, "zz") == -1, "bad commands are refused");
     check(deserializeBank(b, serializeBank(a).c_str()) && same(a, b), "text round trip");
     applyCommand(a, "cp 3 7"); check(a.patterns[7].note[5] == 45 && a.patterns[7].length == 24, "cp copies");
     applyCommand(a, "rot 7 1"); check(a.patterns[7].note[6] == 45 && a.patterns[7].accent[6], "rot shifts right");
@@ -80,6 +80,24 @@ int main()
     check(gVar, "ACID GEN makes lines with rests");
     Pattern x, y; acidGen(x, 1, 0, 5); acidGen(y, 1, 0, 6);
     check(std::memcmp(x.note, y.note, sizeof(x.note)) != 0, "different seeds, different lines");
+    // 0.4: DENSITY
+    {
+        Pattern p; p.length = 16; GenLine g;
+        acidGenDense(p, g, 0, 1, 0, 1234, 50);
+        int n50 = 0; for (int s = 0; s < 16; ++s) n50 += p.on[s];
+        Pattern q = p; applyDensity(q, g, 80);
+        int n80 = 0; bool subset = true; for (int s = 0; s < 16; ++s) { n80 += q.on[s]; if (p.on[s] && !q.on[s]) subset = false; }
+        check(n50 == 8 && n80 == 13 && subset, "DENSITY: 50 % = 8 of 16 steps, 80 % = 13, the 50 % steps are kept");
+        bool accOk = true; for (int s = 0; s < 16; ++s) if ((p.accent[s] || p.slide[s]) && !p.on[s]) accOk = false;
+        check(accOk, "DENSITY: accents and slides only on the steps that play");
+        int down = 0, tries = 0;
+        for (uint32_t sd = 1; sd < 200; ++sd) { Pattern r; r.length = 16; GenLine h; acidGenDense(r, h, 0, 1, 0, sd, 25); for (int s = 0; s < 16; s += 4) down += r.on[s]; tries += 4; }
+        std::printf("     downbeats %.2f\n", down / (double)tries); check(down > tries * 0.55, "DENSITY 25 %: the downbeats are mostly what is left");
+        Pattern z = p; applyDensity(z, g, 0); check(z.empty(), "DENSITY 0 %: no notes");
+        Bank d; d.initDefault(); applyCommand(d, "G 2 3 0 35"); Bank e; deserializeBank(e, serializeBank(d).c_str());
+        check(e.glob.density == 35 && e.glob.scale == 2, "DENSITY saved with the bank");
+        Bank o; deserializeBank(o, "KBAS1\nG 1 0 0\n"); check(o.glob.density == 70, "0.3 banks: DENSITY 70 %");
+    }
     std::printf(fails ? "\n%d FAILED\n" : "\nall passed\n", fails);
     return fails ? 1 : 0;
 }

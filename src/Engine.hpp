@@ -1,4 +1,5 @@
-// Kinetik KBAS-1 — monophonic acid bass: oscillator, 4-pole resonant filter, accent / slide, sequencer, drive, delay
+// Kinetik KBAS-1 — monophonic acid bass: oscillator, 4-pole resonant filter, accent / slide, sequencer, drive, delay,
+// resonant low cut, two LFOs, reverb and CHAOS (the KDSP-16 engines, MasterFx.hpp)
 #pragma once
 #include "Bank.hpp"
 #include "Saturator.hpp"
@@ -86,7 +87,7 @@ public:
     void init(double s)
     {
         sr = (float)s;
-        sat.init(sr); click.init(sr);
+        sat.init(sr); click.init(sr); fx.init(sr);
         dlyL.assign((size_t)(sr * 4.5f), 0.f); dlyR.assign(dlyL.size(), 0.f);
         reset();
     }
@@ -97,9 +98,29 @@ public:
         wasPlaying = false; usingInternal = false; prevPlay = false; internalBeat = 0; held = 0;
         lastK = INT64_MIN; gateOffBeat = -1.0; lockStep = -1; chainPl.reset(); ratN = 1; phase2 = subPh = 0.0; for (auto& f : form) f.reset();
         sat.reset(); click.reset(); recSkipK = INT64_MIN; recPrevK = INT64_MIN; recNote = -1;
+        fx.reset(); lc.reset(); lcWas = false;
+        for (int i = 0; i < kLfos; ++i) { lfoPh[i] = 0.0; lfoOut[i] = 0.f; lfoRnd[i] = 0.f; lfoReset[i] = false; }
+        for (float& m : mod) m = 0.f;
     }
+    float lfoValue(int i) const { return lfoOut[i]; }          // -1..1 times the depth (UI)
+    void setChaosHold(bool on) { fx.glHold.store(on ? 1 : 0); }
 
+    // host blocks are cut into pieces of kBlock frames (the master effects work on buffers)
+    static constexpr uint32_t kBlock = 512;
     void process(float* outL, float* outR, uint32_t frames, const Transport& tp, const NoteIn* notes, uint32_t nNotes)
+    {
+        uint32_t done = 0, ni = 0;
+        while (done < frames) {
+            const uint32_t n = std::min(kBlock, frames - done);
+            uint32_t nn = 0; NoteIn local[64] = {};
+            while (ni < nNotes && notes[ni].frame < done + n && nn < 64) { local[nn] = notes[ni]; local[nn].frame -= std::min(local[nn].frame, done); ++nn; ++ni; }
+            Transport t2 = tp;
+            if (tp.hostValid && done > 0) t2.beat = tp.beat + done * (std::max(20.0, std::min(400.0, tp.bpm)) / (60.0 * sr));
+            processBlock(outL + done, outR + done, n, t2, local, nn);
+            done += n;
+        }
+    }
+    void processBlock(float* outL, float* outR, uint32_t frames, const Transport& tp, const NoteIn* notes, uint32_t nNotes)
     {
         knDenormalsOff();
         if (frames == 0) return;
@@ -129,7 +150,7 @@ public:
         const double bpf = bpm / (60.0 * sr);
         if (!playing) b0 = freeBeat;
         updateControls();
-        const float pumpDepth = param[pPUMP] / 127.f; const double pumpLen = kPumpBeats[pumpBin(param[pPUMPRATE])];
+        const double pumpLen = kPumpBeats[pumpBin(param[pPUMPRATE])];
         uint32_t ni = 0;
         if (!playing) { recPrevK = INT64_MIN; recNote = -1; recSkipK = INT64_MIN; }
         for (uint32_t i = 0; i < frames; ++i) {
@@ -144,16 +165,27 @@ public:
                 }
                 if (gateOffBeat >= 0.0 && beat >= gateOffBeat) { gateOffBeat = -1.0; if (heldCount() == 0) gate = false; }
             }
-            if (pumpDepth > 0.001f) {          // PUMP: a ducking curve on every beat division (like a kick sidechain)
+            if (pumpDepth > 0.001f) {          // (pumpDepth: PUMP + its LFO, set by updateControls)          // PUMP: a ducking curve on every beat division (like a kick sidechain)
                 double ph = beat / pumpLen; ph -= std::floor(ph);
                 const float u = (float)std::min(1.0, ph / 0.55);
                 pumpG = 1.f - pumpDepth * (1.f - u * u * (3.f - 2.f * u));
             } else pumpG = 1.f;
-            if ((i & 15) == 0) updateControls();
+            if ((i & 15) == 0) { runLfos(beat, playing, 16.f / sr); updateControls(); }
             float l, r; renderSample(l, r);
-            outL[i] = l; outR[i] = r;
+            mL[i] = l; mR[i] = r; pumpBuf[i] = pumpG;
         }
         while (ni < nNotes) liveNote(notes[ni++], playing, b0 + bpf * frames);
+        // reverb (send) and CHAOS (the whole bass goes through it), then PUMP on everything
+        for (int k = 0; k <= gGL_MIX; ++k) mg[k] = kMasterDefaults[k];
+        mg[gREV_MODEL] = param[pREVMODEL]; mg[gREV_SIZE] = param[pREVSIZE]; mg[gREV_DAMP] = param[pREVDAMP];
+        mg[gREV_PRE] = param[pREVPRE]; mg[gREV_MOD] = param[pREVMOD];
+        mg[gGL_CHANCE] = param[pGLCHANCE]; mg[gGL_SIZE] = param[pGLSIZE]; mg[gGL_LEN] = param[pGLLEN]; mg[gGL_PITCH] = param[pGLPITCH];
+        mg[gGL_FADE] = param[pGLFADE]; mg[gGL_REV] = param[pGLREV]; mg[gGL_MIX] = param[pGLMIX];
+        mg[gMF_ON] = 0.f; mg[gECHO_RTIME] = 64.f; mg[gECHO_DRIVE] = mg[gECHO_DUCK] = mg[gECHO_FREEZE] = 0.f;
+        const float rs = clampf(pp(pREVERB), 0.f, 127.f) / 127.f * 1.4f;    // as a KDSP-16 track send
+        for (uint32_t i = 0; i < frames; ++i) { rL[i] = mL[i] * rs; rR[i] = mR[i] * rs; }
+        fx.process(mg, (float)bpm, mL, mR, zero, zero, rL, rR, zero, zero, mL, mR, b0, playing, outL, outR, frames);
+        for (uint32_t i = 0; i < frames; ++i) { outL[i] *= pumpBuf[i]; outR[i] *= pumpBuf[i]; }
         click.process(outL, outR, frames, b0, bpf, recording && playing);
         const double b1 = b0 + bpf * frames;
         outStep = playing ? (int)((int64_t)std::floor(b1 / 0.25 * kFine) % (32768LL * kFine)) : -1;
@@ -186,9 +218,53 @@ private:
     int ratN = 1, ratI = 1, ratNote = 36; bool ratAcc = false; double ratStart = 0, ratDur = 0;
     Pattern evoPat; int evoFor = -1, loops = 0; uint32_t seenEdits = 0, rng = 0x2545F491u;
     float urand() { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return (rng & 0xFFFFFF) / 16777216.f; }
-    float ep(int i) const { if (lockStep >= 0) { const uint8_t v = playingPattern().locks[lockStep][i]; if (v != kNoLock) return (float)v; } return param[i]; }
+    // the value used now: the playing step's lock or the knob, plus the LFOs (clamped to the knob range)
+    float ep(int i) const
+    {
+        float v = param[i];
+        if (lockStep >= 0 && i < kLockParams) { const uint8_t l = playingPattern().locks[lockStep][i]; if (l != kNoLock) v = (float)l; }
+        return mod[i] != 0.f ? clampf(v + mod[i], 0.f, 127.f) : v;
+    }
+    float pp(int i) const { return mod[i] != 0.f ? clampf(param[i] + mod[i], 0.f, 127.f) : param[i]; }
+    // ---- LFOs
+    float mod[kTotalParams] = {};
+    double lfoPh[kLfos] = {}; float lfoOut[kLfos] = {}, lfoRnd[kLfos] = {}; bool lfoReset[kLfos] = {};
+    void runLfos(double beat, bool playing, float dt)
+    {
+        for (int i = 0; i < kLfos; ++i) { const int d = lfoDest(param[lfoParam(i, 4)]); if (d > 0) mod[kLfoTarget[d - 1]] = 0.f; }
+        for (int i = 0; i < kLfos; ++i) {
+            const int dest = lfoDest(param[lfoParam(i, 4)]);
+            const float depth = (param[lfoParam(i, 3)] - 64.f) / 63.f;
+            const bool synced = lfoSynced(param[lfoParam(i, 2)]), retrig = lfoRetrig(param[lfoParam(i, 5)]);
+            const float div = kLfoSyncBeats[lfoSyncDiv(param[lfoParam(i, 1)])];
+            double ph = lfoPh[i];
+            if (lfoReset[i] && retrig) ph = 0.0;
+            lfoReset[i] = false;
+            const double prev = ph;
+            if (synced && playing && !retrig) ph = beat / (double)div;
+            else ph += (synced ? (curBpm / 60.0) / div : lfoHz(param[lfoParam(i, 1)])) * dt;
+            if (std::floor(ph) != std::floor(prev)) lfoRnd[i] = urand() * 2.f - 1.f;
+            if (ph > 1e6) ph -= std::floor(ph);
+            lfoPh[i] = ph;
+            const float x = (float)(ph - std::floor(ph));
+            float y;
+            switch (lfoWave(param[lfoParam(i, 0)])) {
+            case 0: y = x < 0.5f ? 4.f * x - 1.f : 3.f - 4.f * x; break;
+            case 1: y = std::sin(kTwoPi * x); break;
+            case 2: y = x < 0.5f ? 1.f : -1.f; break;
+            case 3: y = 2.f * x - 1.f; break;
+            case 4: y = 1.f - 2.f * x; break;
+            default: y = lfoRnd[i]; break;
+            }
+            lfoOut[i] = y * depth;
+            if (dest > 0 && std::fabs(depth) > 0.004f) mod[kLfoTarget[dest - 1]] += y * depth * 63.5f;
+        }
+    }
     bool wasPlaying = false, usingInternal = false, prevPlay = false; double internalBeat = 0, prevB1 = 0;
     Saturator sat;
+    MasterFx fx; float mg[kMasterParams] = {};
+    float mL[kBlock], mR[kBlock], rL[kBlock], rR[kBlock], pumpBuf[kBlock], zero[kBlock] = {};
+    Svf lc; bool lcOn = false, lcWas = false; float pumpDepth = 0.f;
     // live recording
     RecEvent recQ[kRecQ]; std::atomic<int> recW{0}, recR{0};
     int64_t recSkipK = INT64_MIN, recPrevK = INT64_MIN; int recNote = -1;
@@ -299,11 +375,14 @@ private:
         reso = ep(pRESO) / 127.f;
         curCut = baseCut * std::pow(2.f, oct);
         lad.set(curCut, sr, reso);
-        sat.amount = param[pSAT] / 127.f; { const int t = satBin(param[pSATTYPE]); if (t != sat.type) { sat.type = t; } } sat.setTapeTone();
-        sub = param[pSUB] / 127.f; growl = param[pGROWL] / 127.f; harmDeg = kHarmDegrees[harmBin(param[pHARMONY])];
+        sat.amount = pp(pSAT) / 127.f; { const int t = satBin(param[pSATTYPE]); if (t != sat.type) { sat.type = t; } } sat.setTapeTone();
+        sub = pp(pSUB) / 127.f; growl = pp(pGROWL) / 127.f; pumpDepth = pp(pPUMP) / 127.f;
+        lcOn = pp(pLOWCUT) > 0.5f;
+        if (lcOn) lc.setup(lowCutHz(pp(pLOWCUT)), 0.707f + pp(pLCRESO) / 127.f * 9.f, sr);
+        harmDeg = kHarmDegrees[harmBin(param[pHARMONY])];
         subLp.setLP(180.f, sr);
         // VOWEL: three formants whose vowel follows the filter (closed = "u", open = "i")
-        vowMix = param[pVOWEL] / 127.f;
+        vowMix = pp(pVOWEL) / 127.f;
         if (vowMix > 0.001f) {
             static const float F[5][3] = {{300, 870, 2240}, {570, 840, 2410}, {730, 1090, 2440}, {530, 1840, 2480}, {270, 2290, 3010}};   // u o a e i
             const float pos = clampf(std::log2(curCut / 120.f) / 7.f, 0.f, 0.9999f) * 4.f;
@@ -322,6 +401,7 @@ private:
         else {
             sliding = false; logNote = targetNote;
             fenv = 1.f;
+            for (bool& r : lfoReset) r = true;           // RETRIG LFOs start again on each new attack
             if (accent) accTarget = 1.f;
             ampEnv = 1.f;
         }
@@ -438,6 +518,9 @@ private:
         y *= a;
         // SUB: a clean square one octave down, after the filter
         if (sub > 0.001f) { subPh += f * 0.5 / sr; if (subPh >= 1.0) subPh -= 1.0; y += subLp.lp(subPh < 0.5 ? 1.f : -1.f) * sub * a * 0.6f; }
+        // LOW CUT: resonant 12 dB high pass (after SUB: it thins the whole bass)
+        if (lcOn) { if (!lcWas) lc.reset(); lc.tick(y); y = lc.hp; }
+        lcWas = lcOn;
         // SATURATE (2x oversampled models)
         y = sat.process(y);
         // drive + tone
@@ -460,9 +543,7 @@ private:
             dlyQuiet = (std::fabs(el) + std::fabs(er) > 1e-6f || dMix > 0.001f) ? 0 : dlyQuiet + 1;
         }
         if (++dw >= (int)dlyL.size()) dw = 0;
-        l *= pumpG; r *= pumpG;
-        // safety
-        outL = std::tanh(l * 0.9f) / 0.9f; outR = std::tanh(r * 0.9f) / 0.9f;
+        outL = l; outR = r;      // PUMP and the safety limiter come after the reverb / CHAOS
     }
 };
 

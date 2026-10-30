@@ -10,6 +10,8 @@ struct BassDirect {
     virtual bool popRecorded(int& kind, int& pattern, int& a, int& b, int& note, bool& accent) = 0;
     virtual void setRecording(bool on) = 0;
     virtual void setClick(bool on) = 0;     // metronome while recording
+    virtual float lfoValue(int i) = 0;      // 0.4: LFO i now (-1..1 times its depth), for the knobs it moves
+    virtual void setChaosHold(bool on) = 0; // 0.4: CHAOS HOLD pad
 };
 
 } // namespace kn

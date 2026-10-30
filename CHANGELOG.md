@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.0
+
+- Two LFOs (LFO 1 / LFO 2 pages): WAVE (triangle, sine, square, saw up / down, random), RATE free or synced to the tempo,
+  DEPTH (centre = off, left = inverted), DEST (cutoff, resonance, env mod, decay, tune, wave, accent, amp decay, drive,
+  tone, echo feedback / mix, volume, vowel, growl, sub, saturate, low cut, its resonance, reverb, pump), TRIG (free or
+  restart on each note). The knob an LFO moves shows it on its arc with an L1 / L2 badge, as on the other Kinetik plug-ins.
+- LOW CUT + LC RESO (COLOR page): a resonant 12 dB high pass after the filter and SUB; drawn on the filter display.
+- REVERB page: the KDSP-16 reverb (ROOM, PLATE, HALL, SPRING, SHIMMER) with send, size, damping, pre-delay and the
+  model's MOD.
+- CHAOS page: the KDSP-16 beat repeat (chance per bar, size, length, pitch, fade, reverse, mix) + a HOLD pad.
+- Patterns up to 64 steps (4 pages). LEN - / + in the sequencer (right-click = 4 steps, drag or scroll the number):
+  odd lengths turn against the bar for polyrhythms. A click on a dim step past the end (or Alt+click a step) ends the
+  pattern there; a bar marks the end. The < > arrows still shift the steps.
+- DENSITY next to ACID GEN / RANDOM: how many steps they fill. Moving it adds or removes notes of the line they just
+  made, always in the same order (downbeats last); hand edits are kept; one UNDO per move.
+- UNDO in red, as the other Kinetik plug-ins. Two presets: Wobble Acid, Shimmer Chaos.
+
 ## 0.3.0
 
 - REC: with the pattern playing, the notes played on a MIDI keyboard are written into it (nearest step; velocity 100+ =

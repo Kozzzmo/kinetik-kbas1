@@ -55,7 +55,7 @@ View file `KinetikKBAS1-view.txt` ("skin zoom").
 - UI: panel pages VOICE / COLOR and FX / MOTION (`knobCount`, `knobParam`, `knobRect`), lock mode (right-click a STEP cell,
   CLEAR LOCKS in the LCD), row lengths (drag the ACCENT / SLIDE labels), CHANCE/RPT row (drag = chance, right-click = repeats),
   Shift+click = TIE, RANDOM menu (`randomize(0..2)`), CHAIN window, page 17-32 extends a 16-step pattern.
-- 18 factory presets (Talking Acid, Evolving Line, Pumping Acid, Polymeter, Harmony Lead added).
+- 18 factory presets (0.4: 20) (Talking Acid, Evolving Line, Pumping Acid, Polymeter, Harmony Lead added).
 
 ## Added in 0.3.0
 
@@ -66,3 +66,19 @@ View file `KinetikKBAS1-view.txt` ("skin zoom").
   held key plays it.
 - `pSAT pSATTYPE` (appended before the outputs): `Saturator.hpp` (TUBE TAPE DIODE FUZZ FOLD, 2x oversampled with 4-pole
   filters, level matched by an RMS follower), after SUB, before DRIVE. COLOR page = 6 knobs.
+
+## Added in 0.4.0
+
+- Host params appended before the outputs: `pLOWCUT pLCRESO`, reverb `pREVERB pREVMODEL pREVSIZE pREVDAMP pREVPRE pREVMOD`,
+  CHAOS `pGLCHANCE .. pGLMIX`, LFOs `lfoParam(i,k)` (WAVE RATE SYNC DEPTH DEST TRIG; DEST 0 = none / 1 + index in `kLfoTarget`).
+- `MasterFx.hpp` copied from KDSP-16 (identical, in `scripts/shared.sha256`); `Params.hpp` defines its block (`MasterParam`,
+  `kMasterDefaults` with echo / chorus LEVEL 0) and includes it before `paramText`. Engine: `process` cuts host blocks into
+  `kBlock` = 512, `processBlock` renders the voice + own echo into `mL/mR`, reverb send = main x REVERB/127 x 1.4, CHAOS send =
+  main, then PUMP (`pumpBuf`) and the click. `ep(i)` / `pp(i)` add the LFO offsets `mod[]` (`runLfos` every 16 samples, RETRIG on
+  each attack). LOW CUT = `Svf lc` after SUB. `setChaosHold`, `lfoValue` (BassDirect).
+- `kSteps` 64 (Q lines carry 64 tokens; 0.3 banks read fine). `Global::density` (G line 4th field, default 70).
+- DENSITY: `GenLine` / `acidGenDense` / `applyDensity` in `Presets.hpp` (rank per step, downbeats weighted low); UI `gen`,
+  `setDensity` (live on the generated pattern, autoSnap "density"), `genEdit` (hand edits ranked first / last), `genRotate`.
+- UI: COLOR page = LOW CUT LC RESO VOWEL GROWL SUB HARMONY SATURATE SAT TYPE; FX tabs FX MOTION REVERB CHAOS LFO 1 LFO 2
+  (`fTab`, `fCount`, `holdPad`, `drawLfoScope`), `paramKnob` (LFO arc + badge, `lfoInk`), sequencer row with 4 pages, LEN - / +
+  (`setLength`), DENSITY box, red UNDO; clicking a step past the end sets the length; END bar after the last step.

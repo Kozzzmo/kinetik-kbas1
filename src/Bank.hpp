@@ -55,6 +55,7 @@ struct Pattern {
 struct Global {
     uint8_t scale = 1, root = 0;         // ACID GEN / note snap (root 0 = C)
     uint8_t transpose = 0;               // 1 = MIDI keys transpose the playing pattern (C3 = no change)
+    uint8_t density = 70;                // 0.4: DENSITY of ACID GEN / RANDOM (% of the steps that play)
 };
 
 struct Bank {
@@ -77,7 +78,7 @@ inline std::string serializeBank(const Bank& b)
 {
     std::string s = "KBAS1\n";
     char buf[96];
-    std::snprintf(buf, sizeof(buf), "G %d %d %d\n", b.glob.scale, b.glob.root, b.glob.transpose); s += buf;
+    std::snprintf(buf, sizeof(buf), "G %d %d %d %d\n", b.glob.scale, b.glob.root, b.glob.transpose, b.glob.density); s += buf;
     if (!b.chain.isDefault()) s += b.chain.line() + "\n";
     for (int p = 0; p < kPatterns; ++p) {
         const Pattern& P = b.patterns[p];
@@ -100,7 +101,7 @@ inline std::string serializeBank(const Bank& b)
 //   P p length swing     s p step on note accent slide     o / n / a / l p step value (on / note / accent / slide)
 //   R p accentLength slideLength (0 = pattern length)     y p step probability ratchet tie
 //   k p step param value (255 = clear)     kc p step     C on n p:r ... (chain)
-//   Q p <32 tokens "<note><x|.><A|-><S|->">               G scale root transpose     cl p     cp src dst     rot p n
+//   Q p <64 tokens "<note><x|.><A|-><S|->">               G scale root transpose [density]     cl p     cp src dst     rot p n
 inline int applyCommand(Bank& b, const char* line)
 {
     char op[8] = {0};
@@ -144,8 +145,10 @@ inline int applyCommand(Bank& b, const char* line)
         }
         return v[0];
     }
-    if (!std::strcmp(op, "G") && std::sscanf(a, "%d %d %d", &v[0], &v[1], &v[2]) == 3) {
+    if (!std::strcmp(op, "G") && std::sscanf(a, "%d %d %d %d", &v[0], &v[1], &v[2], &v[3]) >= 3) {
+        if (std::sscanf(a, "%d %d %d %d", &v[0], &v[1], &v[2], &v[3]) < 4) v[3] = 70;
         b.glob.scale = (uint8_t)clampi(v[0], 0, kScales - 1); b.glob.root = (uint8_t)clampi(v[1], 0, 11); b.glob.transpose = v[2] ? 1 : 0;
+        b.glob.density = (uint8_t)clampi(v[3], 0, 100);
         return kGlobTouched;
     }
     if (!std::strcmp(op, "k") && std::sscanf(a, "%d %d %d %d", &v[0], &v[1], &v[2], &v[3]) == 4 && okP(v[0]) && okS(v[1]) && v[2] >= 0 && v[2] < kLockParams) {

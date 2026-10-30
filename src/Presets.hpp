@@ -34,6 +34,40 @@ inline void acidGen(Pattern& P, int scale, int root, uint32_t seed, float densit
     }
 }
 
+// ---- DENSITY (0.4): a generated line keeps every step's note, accent and slide plus a rank; DENSITY turns on the
+// steps of lowest rank. Downbeats get low ranks (they stay longest), then the 8ths, then the 16ths: turning DENSITY
+// down leaves the skeleton of the groove, turning it up adds notes back in the same order.
+struct GenLine {
+    int pattern = -1;                     // the pattern it was generated into (-1 = none)
+    float rank[kSteps];
+    uint8_t acc[kSteps], slide[kSteps];
+};
+inline int densityCount(int length, int pct) { return clampi((int)std::lround(length * clampi(pct, 0, 100) / 100.0), 0, length); }
+inline void applyDensity(Pattern& P, const GenLine& g, int pct)
+{
+    const int L = P.length, want = densityCount(L, pct);
+    for (int s = 0; s < L; ++s) {
+        int below = 0;                    // steps ranked before this one
+        for (int t = 0; t < L; ++t) if (g.rank[t] < g.rank[s] || (g.rank[t] == g.rank[s] && t < s)) ++below;
+        const bool on = below < want;
+        P.on[s] = on; P.accent[s] = on && g.acc[s]; P.slide[s] = on && g.slide[s];
+        if (on) P.tie[s] = 0;
+    }
+}
+// ACID GEN with a DENSITY: a full line, ranked, then thinned
+inline void acidGenDense(Pattern& P, GenLine& g, int pattern, int scale, int root, uint32_t seed, int pct, float slides = 0.25f, float accents = 0.3f)
+{
+    acidGen(P, scale, root, seed, 1.f, 0.f, 0.f);
+    AcidRng r(seed * 2654435761u + 7u);
+    for (int s = 0; s < kSteps; ++s) {
+        const float w = s % 4 == 0 ? 0.2f : (s % 2 == 0 ? 0.55f : 1.f);
+        g.rank[s] = r.u() * w;
+        g.acc[s] = r.u() < accents; g.slide[s] = r.u() < slides;
+    }
+    g.pattern = pattern;
+    applyDensity(P, g, pct);
+}
+
 struct PB {
     float* v; Bank& b;
     PB(float* values, Bank& bank) : v(values), b(bank) { for (int i = 0; i < kSavedParams; ++i) v[i] = kParamDefaults[i]; b.initDefault(); }
@@ -171,6 +205,22 @@ static void pHarmonyLead(PB& b)
     b.line(0, "A2 - C3! A2~ E3 - D3 C3~ A2 - G2! A2 - E3~ D3 C3");
 }
 
+static void pWobbleAcid(PB& b)
+{
+    b.key(5, 1);
+    b.set({{pCUTOFF, 36}, {pRESO, 100}, {pENVMOD, 50}, {pDECAY, 60}, {pACCENT, 80}, {pLOWCUT, 30}, {pLCRESO, 60},
+           {pL1WAVE, 30}, {pL1SYNC, 127}, {pL1RATE, 9 * 128.f / 14 + 2}, {pL1DEPTH, 110}, {pL1DEST, lfoDestKnob(1)},
+           {pL2WAVE, 120}, {pL2SYNC, 127}, {pL2RATE, 11 * 128.f / 14 + 2}, {pL2DEPTH, 84}, {pL2DEST, lfoDestKnob(2)}, {pTEMPO, 128}});
+    b.line(0, "F1 F1~ F1 G#1 F1 F1! C2~ F1 F1 D#2 F1~ F1 F1! G#1 F1");      // 15 steps: turns against the bar
+}
+static void pShimmerChaos(PB& b)
+{
+    b.key(0, 2);
+    b.set({{pWAVE, 127}, {pCUTOFF, 46}, {pRESO, 92}, {pENVMOD, 70}, {pDECAY, 50}, {pACCENT, 85}, {pREVERB, 70},
+           {pREVMODEL, (float)reverbModelValue(rmShimmer)}, {pREVSIZE, 80}, {pGLCHANCE, 70}, {pGLSIZE, 60}, {pGLPITCH, 90}, {pGLMIX, 110}, {pTEMPO, 124}});
+    b.line(0, "C2 - C#2 C2! - G1~ C2 - D#2 - C2 C#2! - G#1~ C2 -");
+}
+
 struct PresetDef { const char* name; const char* desc; void (*build)(PB&); };
 static const PresetDef kPresets[] = {
     {"Init",           "Base sound, empty pattern",                              pInit},
@@ -191,6 +241,8 @@ static const PresetDef kPresets[] = {
     {"Pumping Acid",   "Ducked on every beat, with sub and drive",               pPumpingAcid},
     {"Polymeter",      "Accents every 5, slides every 7, chance and repeats",    pPolymeter},
     {"Harmony Lead",   "A second voice a fifth up, echoes of two lengths",       pHarmonyLead},
+    {"Wobble Acid",    "15 steps, two synced LFOs on cutoff and resonance",      pWobbleAcid},
+    {"Shimmer Chaos",  "Shimmer reverb and CHAOS repeats rising",                pShimmerChaos},
 };
 static constexpr int kNumPresets = (int)(sizeof(kPresets) / sizeof(kPresets[0]));
 
