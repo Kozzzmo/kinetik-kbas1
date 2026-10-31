@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- **New factory presets**: 15 lines of 32 to 64 steps (4-bar phrases with an answer in the last bar) that use per-step
+  locks (cutoff, decay, env mod, growl, vowel), chance, repeats, ties, polymetric accent / slide rows, both LFOs, the
+  saturator, the low cut, echo, reverb and CHAOS; some have a second pattern in a CHAIN.
+- Every preset plays at about the same loudness (-15 LUFS).
+
 ## 0.4.0
 
 - Two LFOs (LFO 1 / LFO 2 pages): WAVE (triangle, sine, square, saw up / down, random), RATE free or synced to the tempo,

@@ -66,7 +66,7 @@ int main()
     check(allOk, "presets round trip, values in range");
     check(inKey, "preset notes in the preset key");
     check(haveNotes, "every preset plays notes");
-    check(kPresets[12].build && [] { float v[kTotalParams]; Bank pb; buildPreset(12, v, pb); return pb.patterns[0].length == 32; }(), "Long Line is 32 steps");
+    check([] { for (int i = 1; i < kNumPresets; ++i) { float v[kTotalParams]; Bank pb; buildPreset(i, v, pb); if (pb.patterns[0].length < 32) return false; } return true; }(), "factory presets are 32 steps or more");
 
     // ACID GEN
     bool gIn = true, gVar = false;

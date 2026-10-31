@@ -82,3 +82,9 @@ View file `KinetikKBAS1-view.txt` ("skin zoom").
 - UI: COLOR page = LOW CUT LC RESO VOWEL GROWL SUB HARMONY SATURATE SAT TYPE; FX tabs FX MOTION REVERB CHAOS LFO 1 LFO 2
   (`fTab`, `fCount`, `holdPad`, `drawLfoScope`), `paramKnob` (LFO arc + badge, `lfoInk`), sequencer row with 4 pages, LEN - / +
   (`setLength`), DENSITY box, red UNDO; clicking a step past the end sets the length; END bar after the last step.
+
+## 0.5.0 — new factory presets
+
+- `Presets.hpp`: `PB2` helpers (`bars`, `cyc` lock per note, `prob`, `rat`, `tie`, `lfo(l, wave, syncDiv, depth -63..63, target param)`,
+  `copy`, `chain`), `dtv` / `satv` value helpers; `PresetDef::trimDb` scales VOLUME (x 10^(dB/40)) so every preset is about
+  -15 LUFS (measured by rendering 16 s, BS.1770). Test: factory presets are 32 steps or more.
