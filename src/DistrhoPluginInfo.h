@@ -21,7 +21,7 @@
 #define DISTRHO_UI_USER_RESIZABLE      1
 #define DISTRHO_UI_FILE_BROWSER        1
 #define DISTRHO_UI_DEFAULT_WIDTH       1180
-#define DISTRHO_UI_DEFAULT_HEIGHT      720
+#define DISTRHO_UI_DEFAULT_HEIGHT      800
 #define DISTRHO_PLUGIN_VST3_CATEGORIES "Instrument|Synth|Mono"
 #define DISTRHO_PLUGIN_CLAP_FEATURES   "instrument", "synthesizer", "mono"
 #endif

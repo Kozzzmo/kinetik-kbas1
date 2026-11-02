@@ -97,3 +97,17 @@ View file `KinetikKBAS1-view.txt` ("skin zoom").
   moving at twice the speed; the feedback is plain x keep + shifted x amount with keep^2 + 0.75 amount^2 = 1, so the energy
   never grows; a 30 Hz high-pass and a soft ceiling sit in the loop; the shifted taps run a few cents apart per line.
   Test (KDSP-16): `tests/shimmer.cpp` (stable at every MOD, MOD swept with a held tone stays bounded, tail dies, octave added).
+
+## 0.6.0 — family layout (owner: "les boutons aux mêmes endroits, même ordre, même taille"; KDYN-10 excluded)
+
+- `src/Frame.hpp` (shared, identical in KDSP-16 / KMSP-6 / KBAS-1 / KFX-8 / KGRN-4, in `scripts/shared.sha256`): canvas
+  `kW x kH` = 1180 x 800, header rects (`patBox playBtn tempoBox skinBtn`; the plug-in's own boxes packed right up to
+  `kHeaderBoxesEnd` 692), bottom bar at y 728 (`recBtn clickBtn randomBtn fillBtn undoBtn`, extras `extraBtn(x, w)` between
+  `kExtrasX` 618 and `kExtrasEnd` 834, `presetsBtn saveBtn`), RANDOM menu opening upwards (`randomItem`, `randomMenu`),
+  `Bar` (what to show), `hit()`, drawing `Draw<R, UI>::drawBar / drawRandomMenu / barButton` through the UI's own primitives
+  (each UI declares `template <class, class> friend struct kframe::Draw;`, `fr()` converts a `kframe::Rc`).
+- Each UI: `barInfo()` fills the Bar, the bottom bar is drawn after the panels, the RANDOM menu last; with the menu open the
+  first click goes to `kframe::hit` (`hRandomItem + i`). Sequencer toolbars in the family's order: pages | LEN | SPEED | < > |
+  COPY PASTE CLEAR | -LOCKS | the plug-in's extras on the right.
+- Next steps agreed: the KDSP-16 preset browser everywhere, PATTERNS block, knob pages / LFO order / names, then KJNG-2.
+- KBAS-1: REC / CLICK left the header (LENGTH / SWING at 534 / 616); ACID GEN = extra (618, 130); RANDOM items = `randomize(0..2)`; no FILL (`hasFill` false); rows: NOTE 128 high, ACCENT 618, SLIDE 654, CHANCE/RPT 690.

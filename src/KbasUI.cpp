@@ -5,6 +5,7 @@
 #include "Bank.hpp"
 #include "Presets.hpp"
 #include "Skins.hpp"
+#include "Frame.hpp"
 #include "LogoMark.hpp"
 #include "Fonts.hpp"
 #include "License.hpp"
@@ -24,7 +25,7 @@ START_NAMESPACE_DISTRHO
 using namespace kn;
 using DGL_NAMESPACE::Color;
 
-static constexpr float W = 1180.f, H = 720.f;
+static constexpr float W = kframe::kW, H = kframe::kH;
 static constexpr int kFineSteps = 24;   // out_step is in 1/24 of a 16th
 
 struct R {
@@ -39,6 +40,8 @@ enum Overlay { ovNone, ovPresets, ovSkins, ovSave, ovLicense, ovUpdate, ovChain,
 
 class KbasUI : public UI
 {
+    template <class, class> friend struct kframe::Draw;
+    static R fr(const kframe::Rc& c) { return R{c.x, c.y, c.w, c.h}; }
 public:
     KbasUI()
         : UI(W, H)
@@ -358,14 +361,14 @@ protected:
 
     // ------------------------------------------------------------------ layout
     R logoArea() const { return {12.f, 4.f, 372.f, 50.f}; }
-    R recBtn() const { return {396.f, 9.f, 66.f, 40.f}; }
-    R clickBtn() const { return {466.f, 9.f, 62.f, 40.f}; }
-    R patLenBox() const { return {536.f, 9.f, 76.f, 40.f}; }
-    R swingBox() const { return {618.f, 9.f, 76.f, 40.f}; }
-    R patBox() const { return {700.f, 9.f, 130.f, 40.f}; }
-    R playBtn() const { return {840.f, 9.f, 84.f, 40.f}; }
-    R tempoBox() const { return {932.f, 9.f, 110.f, 40.f}; }
-    R skinBtn() const { return {1050.f, 9.f, 116.f, 40.f}; }
+    R recBtn() const { return fr(kframe::recBtn()); }
+    R clickBtn() const { return fr(kframe::clickBtn()); }
+    R patLenBox() const { return {534.f, 9.f, 76.f, 40.f}; }
+    R swingBox() const { return {616.f, 9.f, 76.f, 40.f}; }
+    R patBox() const { return fr(kframe::patBox()); }
+    R playBtn() const { return fr(kframe::playBtn()); }
+    R tempoBox() const { return fr(kframe::tempoBox()); }
+    R skinBtn() const { return fr(kframe::skinBtn()); }
     R lcdR() const { return {24.f, 66.f, 280.f, 160.f}; }
     R vKnob(int k) const { return {316.f + k * 105.f, 82.f, 100.f, 120.f}; }        // voice: 8 knobs
     R fKnob(int k) const { return {22.f + k * 98.f, 256.f, 96.f, 120.f}; }          // amp + effects: 7 knobs
@@ -378,30 +381,30 @@ protected:
     // sequencer
     static constexpr int kPages = kSteps / 16;
     R pageBtn(int i) const { return {22.f + i * 47.f, 406.f, 44.f, 26.f}; }
-    R rotL() const { return {212.f, 406.f, 24.f, 26.f}; }
-    R rotR() const { return {238.f, 406.f, 24.f, 26.f}; }
-    R lenMinus() const { return {268.f, 406.f, 22.f, 26.f}; }
-    R lenBox() const { return {292.f, 406.f, 46.f, 26.f}; }
-    R lenPlus() const { return {340.f, 406.f, 22.f, 26.f}; }
-    R acidBtn() const { return {368.f, 406.f, 84.f, 26.f}; }
-    R densBox() const { return {456.f, 406.f, 76.f, 26.f}; }
-    R rndBtn() const { return {536.f, 406.f, 70.f, 26.f}; }
-    R rndMenu(int i) const { return {536.f, 436.f + i * 34.f, 200.f, 32.f}; }
-    R scaleBtn() const { return {612.f, 406.f, 100.f, 26.f}; }
-    R rootBtn() const { return {716.f, 406.f, 54.f, 26.f}; }
-    R snapBtn() const { return {774.f, 406.f, 46.f, 26.f}; }
-    R transBtn() const { return {824.f, 406.f, 96.f, 26.f}; }
-    R undoBtn() const { return {926.f, 406.f, 62.f, 26.f}; }
-    R presetBtn() const { return {994.f, 406.f, 82.f, 26.f}; }
-    R saveBtn() const { return {1080.f, 406.f, 78.f, 26.f}; }
+    R lenMinus() const { return {216.f, 406.f, 22.f, 26.f}; }
+    R lenBox() const { return {240.f, 406.f, 46.f, 26.f}; }
+    R lenPlus() const { return {288.f, 406.f, 22.f, 26.f}; }
+    R rotL() const { return {322.f, 406.f, 24.f, 26.f}; }
+    R rotR() const { return {348.f, 406.f, 24.f, 26.f}; }
+    R densBox() const { return {770.f, 406.f, 76.f, 26.f}; }
+    R scaleBtn() const { return {850.f, 406.f, 100.f, 26.f}; }
+    R rootBtn() const { return {954.f, 406.f, 54.f, 26.f}; }
+    R snapBtn() const { return {1012.f, 406.f, 46.f, 26.f}; }
+    R transBtn() const { return {1062.f, 406.f, 96.f, 26.f}; }
+    // bottom bar (Frame.hpp): REC CLICK | RANDOM | UNDO | ACID GEN | PRESETS SAVE
+    R acidBtn() const { return fr(kframe::extraBtn(kframe::kExtrasX, 130.f)); }
+    R rndBtn() const { return fr(kframe::randomBtn()); }
+    R undoBtn() const { return fr(kframe::undoBtn()); }
+    R presetBtn() const { return fr(kframe::presetsBtn()); }
+    R saveBtn() const { return fr(kframe::saveBtn()); }
     float colX(int i) const { return 110.f + i * 66.f; }
     R trigCell(int i) const { return {colX(i), 442.f, 62.f, 36.f}; }
-    R noteCell(int i) const { return {colX(i), 484.f, 62.f, 116.f}; }
-    R accCell(int i) const { return {colX(i), 606.f, 62.f, 30.f}; }
-    R slideCell(int i) const { return {colX(i), 642.f, 62.f, 30.f}; }
-    R moreCell(int i) const { return {colX(i), 678.f, 62.f, 24.f}; }
-    R accLenBox() const { return {22.f, 606.f, 84.f, 30.f}; }
-    R slideLenBox() const { return {22.f, 642.f, 84.f, 30.f}; }
+    R noteCell(int i) const { return {colX(i), 484.f, 62.f, 128.f}; }
+    R accCell(int i) const { return {colX(i), 618.f, 62.f, 30.f}; }
+    R slideCell(int i) const { return {colX(i), 654.f, 62.f, 30.f}; }
+    R moreCell(int i) const { return {colX(i), 690.f, 62.f, 24.f}; }
+    R accLenBox() const { return {22.f, 618.f, 84.f, 30.f}; }
+    R slideLenBox() const { return {22.f, 654.f, 84.f, 30.f}; }
     R vTab(int i) const { return {1012.f + i * 76.f, 62.f, 72.f, 18.f}; }
     static constexpr int kFPages = 6;
     R fTab(int i) const { return {258.f + i * 75.f, 246.f, 71.f, 18.f}; }
@@ -473,13 +476,14 @@ protected:
         drawVoice();
         drawFxPatterns();
         drawSequencer();
+        drawBottomBar();
         if (overlay == ovPresets) drawPresets();
         if (overlay == ovSkins) drawSkins();
         if (overlay == ovSave) drawSave();
         if (overlay == ovLicense) drawLicense();
         if (overlay == ovUpdate) drawUpdate();
         if (overlay == ovChain) drawChain();
-        if (overlay == ovRandom) drawRandomMenu();
+        if (overlay == ovRandom) kframe::Draw<R, KbasUI>::drawRandomMenu(*this, barInfo());
         if (tipShown && overlay == ovNone) drawTip();
         drawGrip();
     }
@@ -517,17 +521,6 @@ protected:
         std::snprintf(b, sizeof(b), "%.1f", gp(pTEMPO));
         number(tb.x + 70, tb.cy() + 1, b, 20.f, th->lcdText, ALIGN_RIGHT | ALIGN_MIDDLE);
         label(tb.x + 75, tb.cy() + 2, "BPM", 10.f, th->lcdDim, ALIGN_LEFT | ALIGN_MIDDLE);
-        {   // REC (live notes into the pattern) and the metronome heard while recording
-            const R rb = recBtn();
-            const bool live = rec && running;
-            if (rec) box(rb, live ? Color(220, 30, 45) : th->selFill); else { box(rb, th->btnFill); frame(rb, th->btnEdge); }
-            beginPath(); circle(rb.x + 17, rb.cy(), 5.f); fillColor(rec ? (live ? Color(255, 255, 255) : th->selText) : Color(220, 30, 45)); fill();
-            label(rb.x + 41, rb.cy() + 1, "REC", 12.f, rec ? (live ? Color(255, 255, 255) : th->selText) : th->btnText, ALIGN_CENTER | ALIGN_MIDDLE, th->fontButton);
-            const R cb = clickBtn();
-            box(cb, th->btnFill); frame(cb, th->btnEdge);
-            label(cb.cx(), cb.y + 12, "CLICK", 9.f, th->dim);
-            label(cb.cx(), cb.y + 28, clickOn ? "ON" : "OFF", 10.5f, clickOn ? accentInk() : th->text);
-        }
         const R sk = skinBtn();
         box(sk, th->btnFill); frame(sk, th->btnEdge);
         label(sk.cx(), sk.y + 12, "SKIN / SIZE", 9.f, th->dim);
@@ -618,7 +611,7 @@ protected:
 
     void drawSequencer()
     {
-        panelBox({14.f, 398.f, 1152.f, 310.f});
+        panelBox({14.f, 398.f, 1152.f, 322.f});
         Pattern& p = pat();
         char b[48];
         for (int i = 0; i < kPages; ++i) {
@@ -636,7 +629,6 @@ protected:
             std::snprintf(b, sizeof(b), "%d", p.length);
             number(lb.x + lb.w - 5, lb.cy() + 1, b, 13.f, p.length % 4 ? th->lock : th->lcdText, ALIGN_RIGHT | ALIGN_MIDDLE);
         }
-        box(acidBtn(), th->btnFill); frame(acidBtn(), accentInk(), -1.f, 1.5f); label(acidBtn().cx(), acidBtn().cy() + 1, "ACID GEN", 10.f, accentInk());
         {   // DENSITY of ACID GEN / RANDOM; live on the line they made (dot)
             const R db = densBox();
             box(db, th->lcdBg); frame(db, drag == dkDensity ? th->lcdText : accentInk(), -1.f, drag == dkDensity ? 1.5f : 1.f);
@@ -652,14 +644,6 @@ protected:
         std::snprintf(b, sizeof(b), "ROOT %s", roots[bank->glob.root % 12]); button(rootBtn(), b, false, 9.f);
         button(snapBtn(), "SNAP", snap, 9.5f);
         button(transBtn(), "TRANSPOSE", bank->glob.transpose != 0, 9.5f);
-        button(rndBtn(), "RANDOM", overlay == ovRandom, 10.f);
-        {   // UNDO in red, as the other Kinetik plug-ins
-            const R u = undoBtn(); const bool can = !undoStack.empty();
-            if (can) { box(u, th->btnFill); frame(u, th->lock, -1.f, 1.5f); } else { box(u, th->btnFill); frame(u, Color(th->btnEdge, th->bg, 0.5f)); }
-            label(u.cx(), u.cy() + 1, "UNDO", 10.5f, can ? th->lock : th->faint, ALIGN_CENTER | ALIGN_MIDDLE, th->fontButton);
-        }
-        box(presetBtn(), th->btnFill); frame(presetBtn(), th->text, -1.f, 1.5f); label(presetBtn().cx(), presetBtn().cy() + 1, "PRESETS", 10.f, th->text);
-        button(saveBtn(), "SAVE", false, 10.f);
         // row names
         label(28, trigCell(0).cy(), "STEP", 10.f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
         label(28, noteCell(0).cy(), "NOTE", 10.f, th->dim, ALIGN_LEFT | ALIGN_MIDDLE);
@@ -871,12 +855,25 @@ protected:
         applyState(nv.data(), nb.get());
         presetNameStr = "(random)";
     }
-    void drawRandomMenu()
+    kframe::Bar barInfo() const
     {
-        static const char* items[3] = {"NEW SOUND", "NEW PATTERN", "BOTH"};
-        const R all{rndMenu(0).x - 4, rndMenu(0).y - 4, rndMenu(0).w + 8, 3 * 34.f + 6};
-        box(all, th->panel, 6.f); frame(all, th->text, 6.f, 1.5f);
-        for (int i = 0; i < 3; ++i) button(rndMenu(i), items[i], false, 10.f);
+        kframe::Bar b;
+        b.rec = rec; b.recLive = rec && gp(pOUT_STEP) >= 0.f; b.click = clickOn;
+        b.hasFill = false;
+        b.undoValid = !undoStack.empty(); b.redoValid = !redoStack.empty();
+        if (b.undoValid) b.undoWhat = undoStack.back().what;
+        b.preset = presetNameStr;
+        b.randomOpen = overlay == ovRandom;
+        b.randomItems = {{"SOUND", "voice, colour, effects"}, {"PATTERN", "notes, accents, slides"}, {"EVERYTHING", "sound + pattern"}};
+        return b;
+    }
+    void drawBottomBar()
+    {
+        kframe::Draw<R, KbasUI>::drawBar(*this, barInfo());
+        const R a = acidBtn();
+        box(a, th->btnFill); frame(a, accentInk(), -1.f, 1.5f);
+        label(a.cx(), a.y + 16.f, "ACID GEN", 11.f, accentInk());
+        label(a.cx(), a.y + 32.f, "new line", 9.f, th->dim);
     }
 
     // ACID GEN: a new line for the edited pattern in the chosen scale and root
@@ -1419,7 +1416,8 @@ protected:
         if (overlay == ovUpdate) return updateClick(x, y);
         if (overlay == ovChain) return chainClick(x, y, right);
         if (overlay == ovRandom) {
-            for (int i = 0; i < 3; ++i) if (rndMenu(i).in(x, y)) { overlay = ovNone; randomize(i); return true; }
+            const int h = kframe::hit(barInfo(), x, y);
+            if (h >= kframe::hRandomItem) { overlay = ovNone; randomize(h - kframe::hRandomItem); return true; }
             overlay = ovNone; repaint(); return true;
         }
         if (overlay == ovSave) { if (saveOk().in(x, y)) commitSave(); else if (saveCancel().in(x, y) || !saveBox().in(x, y)) { overlay = ovNone; repaint(); } return true; }
