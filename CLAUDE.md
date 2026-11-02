@@ -88,3 +88,12 @@ View file `KinetikKBAS1-view.txt` ("skin zoom").
 - `Presets.hpp`: `PB2` helpers (`bars`, `cyc` lock per note, `prob`, `rat`, `tie`, `lfo(l, wave, syncDiv, depth -63..63, target param)`,
   `copy`, `chain`), `dtv` / `satv` value helpers; `PresetDef::trimDb` scales VOLUME (x 10^(dB/40)) so every preset is about
   -15 LUFS (measured by rendering 16 s, BS.1770). Test: factory presets are 32 steps or more.
+
+## 0.5.1 — SHIMMER reverb rebuilt (owner: "le son est pauvre et souvent le même", "craque quand on passe midi")
+
+- The old SHIMMER added an octave-up copy of the tail back into the tank input on top of the normal feedback: the loop gain
+  passed 1 around the middle of MOD (saturation, crackle) and the regenerating octave covered the source. Now (idea from the
+  MIT-licensed Clouds / Parasites reverb, no code copied) three of the eight lines are also read by two Hann-windowed taps
+  moving at twice the speed; the feedback is plain x keep + shifted x amount with keep^2 + 0.75 amount^2 = 1, so the energy
+  never grows; a 30 Hz high-pass and a soft ceiling sit in the loop; the shifted taps run a few cents apart per line.
+  Test (KDSP-16): `tests/shimmer.cpp` (stable at every MOD, MOD swept with a held tone stays bounded, tail dies, octave added).

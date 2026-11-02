@@ -104,7 +104,6 @@ public:
         for (int i = 0; i < kDiff; ++i) diff[i].assign((size_t)(kDiffMs[i] * 0.001f * sr * 1.2f) + 4, 0.f);
         for (int i = 0; i < kSpring; ++i) spring[i].assign((size_t)(kSpringMs[i] * 0.001f * sr) + 4, 0.f);
         springLoop.assign((size_t)(sr * 0.12f) + 8, 0.f);
-        shim.assign(4096, 0.f);
         preBuf.assign((size_t)(sr * 0.36f) + 4, 0.f);     // pre-delay (0.2 s) + early reflections (0.12 s)
         choL.assign((size_t)(sr * 0.07f) + 8, 0.f); choR.assign(choL.size(), 0.f);
         for (int k = 0; k < kEchoDiff; ++k) { edL[k].assign((size_t)(kEchoDiffMs[k] * 0.001f * sr) + 4, 0.f); edR[k].assign((size_t)(kEchoDiffMs[k] * 1.13f * 0.001f * sr) + 4, 0.f); }
@@ -227,7 +226,13 @@ public:
         float revG[8];
         for (int i = 0; i < 8; ++i) revG[i] = std::pow(10.f, -3.f * (float)revLen[i] / (rt * sr));
         const float lineMod = (rm == rmHall ? 4.f + 40.f * rmod : rm == rmShimmer ? 12.f : rm == rmPlate ? 3.f : 1.5f) * sr / 48000.f;
-        const float shimMix = rm == rmShimmer ? 0.15f + 0.55f * rmod : 0.f;
+        // SHIMMER (after the Clouds / Parasites reverb, MIT): each tank line is also read by two Hann-windowed taps moving
+        // at twice the speed (one octave up); the feedback crossfades between the plain and the shifted reads, so the loop
+        // energy never grows with MOD (it used to add the shifted sound on top and saturated past the middle): plain read
+        // x shimKeep + shifted read x shimAmt, shimKeep^2 + 0.75 shimAmt^2 = 1 (0.75 = mean power of the two Hann taps)
+        const float shimAmt = rm == rmShimmer ? 0.15f + 0.85f * rmod : 0.f;
+        const float shimKeep = std::sqrt(std::max(0.f, 1.f - 0.75f * shimAmt * shimAmt));
+        const float shimHpA = std::exp(-kTwoPi * 30.f / sr);
         // early reflections (ROOM: strong and close, HALL: wide and late)
         float erGain = 0.f; float erScale = 1.f;
         if (rm == rmRoom) { erGain = 0.35f + 0.9f * rmod; erScale = 0.5f + 0.9f * sizeX; }
@@ -430,7 +435,6 @@ public:
                     if (k & 1) erR += v; else erL += v;
                 }
             preW = (preW + 1) % psz;
-            if (rm == rmShimmer) x += shimOut * shimMix;
             float springOut = 0.f;
             if (rm == rmSpring) {
                 // spring tank: a loop of dispersive allpasses -> each pass returns as a falling "drip"
@@ -456,19 +460,33 @@ public:
             float o[8], sum = 0.f;
             for (int k = 0; k < 8; ++k) {
                 revModCur[k] += revModInc[k];
-                o[k] = readFrac(revLine[k], (uint32_t)revLine[k].size(), (float)revW[k] - (float)revLen[k] - revModCur[k]);
+                const uint32_t lsz = (uint32_t)revLine[k].size();
+                o[k] = readFrac(revLine[k], lsz, (float)revW[k] - (float)revLen[k] - revModCur[k]);
+                if (shimAmt > 0.f && kShimLine[k]) {   // three of the eight lines climb; the mix spreads it gently
+                    const float G = shimG[k];
+                    float& d = shimD[k];
+                    d -= kShimStep[k]; if (d < 1.f) d += G;
+                    float d2 = d + 0.5f * G; if (d2 >= G + 1.f) d2 -= G;
+                    const float sa = std::sin(kPi * (d - 1.f) / G), wa = sa * sa;          // Hann: the two taps sum to 1
+                    const float up = readFrac(revLine[k], lsz, (float)revW[k] - d) * wa + readFrac(revLine[k], lsz, (float)revW[k] - d2) * (1.f - wa);
+                    o[k] = o[k] * shimKeep + up * shimAmt;
+                }
                 sum += o[k];
             }
             const float hh = sum * 0.25f;
             for (int k = 0; k < 8; ++k) {
                 float v = (o[k] - hh) * revG[k];
                 revLp[k] = v + damp * (revLp[k] - v);
-                v = revLp[k] + x * ((k & 1) ? 0.5f : -0.5f);
+                v = revLp[k];
+                if (shimAmt > 0.f) {   // no low end piling up in the loop, and a soft ceiling
+                    shimHp[k] = v + shimHpA * (shimHp[k] - v); v -= shimHp[k];
+                    if (std::fabs(v) > 1.f) v = std::tanh(v);
+                }
+                v += x * ((k & 1) ? 0.5f : -0.5f);
                 revLine[k][revW[k]] = v;
                 if (++revW[k] >= (uint32_t)revLine[k].size()) revW[k] = 0;
                 if (k < 4) outRL += o[k] * ((k & 1) ? -1.f : 1.f); else outRR += o[k] * ((k & 1) ? 1.f : -1.f);
             }
-            if (rm == rmShimmer) shimOut = pitchUp(0.5f * (outRL + outRR));
             outRL *= tailGain; outRR *= tailGain;
             if (rm == rmSpring) {   // the right side hears the tank a few ms later (decorrelated, mono-safe)
                 const float sR = springLoop[(springW + ssz - 1 - springTapR) % ssz];
@@ -594,7 +612,7 @@ private:
     static constexpr float kRevScale[kReverbModels] = {0.42f, 0.75f, 1.35f, 0.5f, 1.4f};
     static constexpr float kRevRtMin[kReverbModels] = {0.12f, 0.4f, 1.0f, 0.6f, 2.0f};
     static constexpr float kRevRtMax[kReverbModels] = {1.6f, 6.f, 12.f, 5.f, 16.f};
-    static constexpr float kRevOut[kReverbModels] = {1.2f, 1.f, 1.f, 1.0f, 0.9f};
+    static constexpr float kRevOut[kReverbModels] = {1.2f, 1.f, 1.f, 1.0f, 0.7f};
 
     static inline float readFrac(const std::vector<float>& b, uint32_t size, float pos)
     {
@@ -612,24 +630,13 @@ private:
         return d - gcoef * v;
     }
     // octave up: two crossfaded taps sweeping a 2048-sample window
-    float pitchUp(float x)
-    {
-        const uint32_t sz = (uint32_t)shim.size();
-        shim[shimW] = x;
-        shimW = (shimW + 1) % sz;
-        constexpr float D = 2048.f;
-        shimD -= 1.f; if (shimD < 0.f) shimD += D;           // ratio 2: the delay shrinks one sample per sample
-        float d2 = shimD + D * 0.5f; if (d2 >= D) d2 -= D;
-        const float a = readFrac(shim, sz, (float)shimW - 1.f - shimD), b = readFrac(shim, sz, (float)shimW - 1.f - d2);
-        const float wa = 1.f - std::fabs(shimD / D * 2.f - 1.f), wb = 1.f - std::fabs(d2 / D * 2.f - 1.f);
-        return a * wa + b * wb;
-    }
     void setReverbModel(int rm)
     {
         revModel = rm;
         for (int i = 0; i < 8; ++i)
             revLen[i] = std::min<uint32_t>((uint32_t)revLine[i].size() - 64, (uint32_t)(kRevMs[i] * 0.001f * sr * kRevScale[rm]));
-        diffCount = rm == rmPlate ? 4 : (rm == rmRoom ? 1 : (rm == rmSpring ? 0 : 2));
+        for (int i = 0; i < 8; ++i) { shimG[i] = std::max(256.f, (float)revLen[i] * 0.85f); shimD[i] = 1.f + shimG[i] * (float)i / 8.f; }
+        diffCount = rm == rmPlate ? 4 : (rm == rmRoom ? 1 : (rm == rmSpring ? 0 : (rm == rmShimmer ? 4 : 2)));
         diffG = rm == rmPlate ? 0.75f : 0.6f;
         const float ds = rm == rmRoom ? 0.6f : (rm == rmPlate ? 0.8f : 1.f);
         for (int i = 0; i < kDiff; ++i) diffLen[i] = std::max<uint32_t>(2, (uint32_t)(kDiffMs[i] * 0.001f * sr * ds));
@@ -642,7 +649,7 @@ private:
         for (int i = 0; i < kDiff; ++i) { std::fill(diff[i].begin(), diff[i].end(), 0.f); diffPos[i] = 0; }
         for (int i = 0; i < kSpring; ++i) { std::fill(spring[i].begin(), spring[i].end(), 0.f); springPos[i] = 0; }
         std::fill(springLoop.begin(), springLoop.end(), 0.f); springW = 0;
-        std::fill(shim.begin(), shim.end(), 0.f); shimW = 0; shimD = 0.f; shimOut = 0.f;
+        for (int i = 0; i < 8; ++i) shimHp[i] = 0.f;
         revHpZ = springLpZ = springHpZ = 0.f;
     }
     static void copyCoef(Biquad& dst, const Biquad& src)
@@ -661,7 +668,10 @@ private:
     std::vector<float> spring[kSpring]; uint32_t springLen[kSpring] = {}, springPos[kSpring] = {};
     std::vector<float> springLoop; uint32_t springW = 0;
     float springLpZ = 0, springHpZ = 0;
-    std::vector<float> shim; uint32_t shimW = 0; float shimD = 0, shimOut = 0;
+    float shimG[8] = {}, shimD[8] = {}, shimHp[8] = {};
+    // read speed of the shifted taps minus one: an octave up, a few cents apart per line (wider, no metallic beating)
+    static constexpr bool kShimLine[8] = {true, false, false, true, false, false, true, false};
+    static constexpr float kShimStep[8] = {1.f, 1.0029f, 0.9971f, 1.0017f, 0.9983f, 1.0041f, 0.9959f, 1.f};
     std::vector<float> preBuf; uint32_t preW = 0; float revHpZ = 0, gateEnv = 0, gateGain = 1; uint32_t gateHold = 0;
     int revModel = -1;
     Biquad eqLowL, eqLowR, eqHighL, eqHighR;

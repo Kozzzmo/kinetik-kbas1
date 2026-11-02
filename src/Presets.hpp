@@ -336,7 +336,7 @@ static const PresetDef kPresets[] = {
     {"Polymeter",      "64 notes, accents every 5, slides every 7, chance and repeats",     pPolymeter, -3.9f},
     {"Harmony Lead",   "A second voice a fifth up, echoes of two lengths",                  pHarmonyLead, -2.4f},
     {"Wobble Acid",    "Two synced LFOs on cutoff and resonance",                           pWobbleAcid, -5.7f},
-    {"Shimmer Chaos",  "Shimmer reverb and CHAOS repeats rising",                           pShimmerChaos, -4.8f},
+    {"Shimmer Chaos",  "Shimmer reverb and CHAOS repeats rising",                           pShimmerChaos, -3.6f},
     {"Deep Sub",       "Long tied notes, sub and reverb, accents at the phrase ends",       pDeepSub, -3.8f},
     {"Acid Breaks",    "170 BPM pentatonic, ratchets and chance, FUZZ",                     pAcidBreaks, -2.7f},
     {"Fold Lead",      "FOLD saturation and GROWL on a high line; B opens the filter",      pFoldLead, -4.1f},
