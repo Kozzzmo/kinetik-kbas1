@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- **RANDOM in one click.** The RANDOM button now does again what is written below it (the last choice); its arrow opens the menu to choose another.
+- **Dice**: a die next to VOICE / COLOR (new sound), in the sequencer bar (new line) and after the FX tabs (new settings for the knobs of the tab shown: FX, MOTION, REVERB, CHAOS, LFO).
+
 ## 0.6.0
 
 - **Same layout as the other Kinetik plug-ins.** One window size (1180 x 800) and a common bottom bar at the same place in every plug-in: REC / CLICK, RANDOM (a menu), FILL (HOLD), UNDO (shows what it undoes), the plug-in's own buttons, PRESETS (with the preset's name) and SAVE. PAT / PLAY / BPM / SKIN keep the same spot in the header.

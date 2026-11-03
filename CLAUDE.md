@@ -111,3 +111,4 @@ View file `KinetikKBAS1-view.txt` ("skin zoom").
   COPY PASTE CLEAR | -LOCKS | the plug-in's extras on the right.
 - Next steps agreed: the KDSP-16 preset browser everywhere, PATTERNS block, knob pages / LFO order / names, then KJNG-2.
 - KBAS-1: REC / CLICK left the header (LENGTH / SWING at 534 / 616); ACID GEN = extra (618, 130); RANDOM items = `randomize(0..2)`; no FILL (`hasFill` false); rows: NOTE 128 high, ACCENT 618, SLIDE 654, CHANCE/RPT 690.
+- 0.7.0 (dice + RANDOM that remembers, as KDSP-16 0.23.0): `rndLast` (default SOUND); dice `diceSound` {984, 60}, `diceSeq` {380, 406}, `diceFx` {686, 244} (FX tabs narrowed to 67 px, 71 apart) -> `randomizeFxPage()` (FX page: `randomSound` ranges, VOLUME kept; other pages: per-param ranges).

@@ -407,7 +407,7 @@ protected:
     R slideLenBox() const { return {22.f, 654.f, 84.f, 30.f}; }
     R vTab(int i) const { return {1012.f + i * 76.f, 62.f, 72.f, 18.f}; }
     static constexpr int kFPages = 6;
-    R fTab(int i) const { return {258.f + i * 75.f, 246.f, 71.f, 18.f}; }
+    R fTab(int i) const { return {258.f + i * 71.f, 246.f, 67.f, 18.f}; }
     R holdPad() const { return {630.f, 280.f, 74.f, 74.f}; }        // CHAOS page
     R lfoScope() const { return {546.f, 274.f, 158.f, 96.f}; }      // LFO pages
     // knobs shown now (pages in each panel)
@@ -865,10 +865,41 @@ protected:
         b.preset = presetNameStr;
         b.randomOpen = overlay == ovRandom;
         b.randomItems = {{"SOUND", "voice, colour, effects"}, {"PATTERN", "notes, accents, slides"}, {"EVERYTHING", "sound + pattern"}};
+        static const char* last[3] = {"sound", "pattern", "everything"};
+        b.randomLast = last[rndLast % 3];
         return b;
+    }
+    // dice (one click, no menu): the sound, the line, the knobs of the FX tab shown
+    int rndLast = 0;   // what a click on RANDOM does again (SOUND until another is chosen in the menu)
+    static kframe::Rc diceSound() { return {984.f, 60.f, 22.f, 22.f}; }
+    static kframe::Rc diceSeq() { return {380.f, 406.f, 26.f, 26.f}; }
+    static kframe::Rc diceFx() { return {686.f, 244.f, 22.f, 22.f}; }
+    void drawDice() { using D = kframe::Draw<R, KbasUI>; D::dice(*this, diceSound()); D::dice(*this, diceSeq()); D::dice(*this, diceFx()); }
+    void randomizeFxPage()
+    {
+        rndSeed ^= (uint32_t)(nowSec() * 1000.0) * 2654435761u; if (!rndSeed) rndSeed = 1;
+        static const char* names[kFPages] = {"random fx", "random motion", "random reverb", "random chaos", "random lfo 1", "random lfo 2"};
+        snapshot(names[fPage]);
+        std::vector<float> nv(values, values + kTotalParams), ref(nv);
+        randomSound(ref);   // musical ranges for amp, drive, tone and echo
+        for (int k = 0; k < fCount(); ++k) {
+            const int p = knobParam(8 + k);
+            float v;
+            if (fPage == 0) { if (p == pVOLUME) continue; v = ref[p]; }
+            else if (p == pREVERB) v = rr(20, 85);
+            else if (p == pGLCHANCE) v = rr(15, 90);
+            else if (p == pGLMIX) v = rr(40, 110);
+            else if (p == pPUMP) v = urand() < 0.4f ? 0.f : rr(20, 100);
+            else if (p == pEVOLVE) v = urand() < 0.4f ? 0.f : rr(10, 90);
+            else v = rr(0, 127);
+            nv[p] = v;
+        }
+        applyState(nv.data(), nullptr);
+        presetNameStr = "(random)";
     }
     void drawBottomBar()
     {
+        drawDice();
         kframe::Draw<R, KbasUI>::drawBar(*this, barInfo());
         const R a = acidBtn();
         box(a, th->btnFill); frame(a, accentInk(), -1.f, 1.5f);
@@ -1338,7 +1369,11 @@ protected:
         if (rotL().in(x, y) || rotR().in(x, y)) return "Shift the whole pattern one step left or right.";
         for (int i = 0; i < kPages; ++i) if (pageBtn(i).in(x, y)) return "Show 16 steps (a page past the end makes the pattern that long).";
         if (chainBtn().in(x, y)) return "CHAIN: play a list of patterns in a loop, each a number of times.";
-        if (rndBtn().in(x, y)) return "RANDOM: a new sound, a new pattern (notes, accents, slides, locks), or both. UNDO restores.";
+        if (kframe::randomArrow().in(x, y)) return "The RANDOM menu: a new sound, a new pattern (notes, accents, slides, locks), or both; RANDOM then remembers the choice.";
+        if (rndBtn().in(x, y)) return "RANDOM: does again what is written below it (choose with the arrow). UNDO restores.";
+        if (diceSound().in(x, y)) return "Random sound (voice, colour, effects). UNDO restores.";
+        if (diceSeq().in(x, y)) return "Random line: notes, accents, slides, locks. UNDO restores.";
+        if (diceFx().in(x, y)) return "Random settings for the knobs of the tab shown (FX, MOTION, REVERB, CHAOS, LFO). UNDO restores.";
         if (lockMode() && lockClearBtn().in(x, y)) return "Remove every lock of this step.";
         if (patLenBox().in(x, y)) return "Pattern length in steps (1-64). Drag or scroll.";
         if (swingBox().in(x, y)) return "Swing: delays every second 16th (50% = straight). Drag or scroll.";
@@ -1417,7 +1452,7 @@ protected:
         if (overlay == ovChain) return chainClick(x, y, right);
         if (overlay == ovRandom) {
             const int h = kframe::hit(barInfo(), x, y);
-            if (h >= kframe::hRandomItem) { overlay = ovNone; randomize(h - kframe::hRandomItem); return true; }
+            if (h >= kframe::hRandomItem) { overlay = ovNone; rndLast = h - kframe::hRandomItem; randomize(rndLast); return true; }
             overlay = ovNone; repaint(); return true;
         }
         if (overlay == ovSave) { if (saveOk().in(x, y)) commitSave(); else if (saveCancel().in(x, y) || !saveBox().in(x, y)) { overlay = ovNone; repaint(); } return true; }
@@ -1461,7 +1496,11 @@ protected:
         if (densBox().in(x, y)) { if (dbl) { setDensity(70, true); return true; } drag = dkDensity; dragY = y; dragStart = bank->glob.density; repaint(); return true; }
         if (fPage == 3 && holdPad().in(x, y)) { drag = dkHold; if (direct) direct->setChaosHold(true); repaint(); return true; }
         if (chainBtn().in(x, y)) { overlay = ovChain; repaint(); return true; }
-        if (rndBtn().in(x, y)) { overlay = ovRandom; repaint(); return true; }
+        if (kframe::randomArrow().in(x, y)) { overlay = ovRandom; repaint(); return true; }
+        if (rndBtn().in(x, y)) { randomize(rndLast); return true; }
+        if (diceSound().in(x, y)) { randomize(0); return true; }
+        if (diceSeq().in(x, y)) { randomize(1); return true; }
+        if (diceFx().in(x, y)) { randomizeFxPage(); return true; }
         if (lockMode() && lockClearBtn().in(x, y)) { char b[32]; std::snprintf(b, sizeof(b), "kc %d %d", editPattern(), lockStep); sendCmd(b); repaint(); return true; }
         if (rotL().in(x, y) || rotR().in(x, y)) { const int n = rotL().in(x, y) ? -1 : 1; char b[32]; std::snprintf(b, sizeof(b), "rot %d %d", editPattern(), n); sendCmd(b); genRotate(n); repaint(); return true; }
         if (acidBtn().in(x, y)) { acidGenerate(); return true; }

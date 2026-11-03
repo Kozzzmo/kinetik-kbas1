@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <algorithm>
 
 namespace kframe {
 
@@ -32,7 +33,8 @@ static constexpr float kHeaderBoxesEnd = 692.f;    // the plug-in's own header b
 inline Rc bar() { return {14.f, 728.f, 1152.f, 62.f}; }
 inline Rc recBtn() { return {26.f, 737.f, 96.f, 44.f}; }
 inline Rc clickBtn() { return {128.f, 737.f, 80.f, 44.f}; }
-inline Rc randomBtn() { return {222.f, 737.f, 130.f, 44.f}; }
+inline Rc randomBtn() { return {222.f, 737.f, 130.f, 44.f}; }    // left part: repeat the last choice
+inline Rc randomArrow() { return {324.f, 737.f, 28.f, 44.f}; }   // right part: open the menu
 inline Rc fillBtn() { return {358.f, 737.f, 130.f, 44.f}; }
 inline Rc undoBtn() { return {494.f, 737.f, 112.f, 44.f}; }
 static constexpr float kExtrasX = 618.f, kExtrasEnd = 834.f;   // the plug-in's own bottom buttons, 6 px apart
@@ -49,10 +51,11 @@ struct Bar {
     bool undoValid = false, redoValid = false;
     std::string undoWhat, preset;
     bool randomOpen = false;
+    std::string randomLast;                                         // what a click on RANDOM does again
     std::vector<std::pair<std::string, std::string>> randomItems;   // name, what it changes
 };
 
-enum Hit { hNone = -1, hRec = 0, hClick, hRandom, hFill, hUndo, hPresets, hSave, hRandomItem = 100 };
+enum Hit { hNone = -1, hRec = 0, hClick, hRandom, hFill, hUndo, hPresets, hSave, hRandomArrow, hRandomItem = 100 };
 
 // what a click at (x, y) hits; with the RANDOM menu open, its items come first (hRandomItem + index)
 inline int hit(const Bar& b, float x, float y)
@@ -63,6 +66,7 @@ inline int hit(const Bar& b, float x, float y)
     }
     if (b.hasRec && recBtn().in(x, y)) return hRec;
     if (b.hasRec && clickBtn().in(x, y)) return hClick;
+    if (randomArrow().in(x, y)) return hRandomArrow;
     if (randomBtn().in(x, y)) return hRandom;
     if (b.hasFill && fillBtn().in(x, y)) return hFill;
     if (undoBtn().in(x, y)) return hUndo;
@@ -100,13 +104,18 @@ template <class R, class UI> struct Draw {
             if (b.recLive) { u.beginPath(); u.rect(rb.x + 6, rb.y + rb.h - 4, rb.w - 12, 2); u.fillColor(u.th->accentText); u.fill(); }
             barButton(u, clickBtn(), "CLICK", b.click ? "on" : "off", b.click);
         }
-        {   // RANDOM: a menu (triangle pointing up while open)
-            const R r = toR(randomBtn());
-            barButton(u, randomBtn(), "RANDOM", "undo restores", b.randomOpen);
+        {   // RANDOM: left = do the last choice again (shown below the name), right = the menu (triangle up while open)
+            const R r = toR(randomBtn()), a = toR(randomArrow());
+            u.box(r, u.th->btnFill); u.frame(r, u.th->btnEdge);
+            if (b.randomOpen) u.box(a, u.th->selFill);
+            u.beginPath(); u.rect(a.x, r.y + 6, 1.f, r.h - 12); u.fillColor(u.th->btnEdge); u.fill();
+            u.label(r.x + 12.f, r.y + 16.f, "RANDOM", 11.f, u.th->btnText, UI::ALIGN_LEFT | UI::ALIGN_MIDDLE);
+            u.label(r.x + 12.f, r.y + 32.f, b.randomLast.c_str(), 9.f, u.th->dim, UI::ALIGN_LEFT | UI::ALIGN_MIDDLE);
             const auto tc = b.randomOpen ? u.th->selText : u.th->btnText;
+            const float cx = a.cx(), cy = a.cy();
             u.beginPath();
-            if (b.randomOpen) { u.moveTo(r.x + r.w - 18, r.cy() + 4); u.lineTo(r.x + r.w - 12, r.cy() - 3); u.lineTo(r.x + r.w - 6, r.cy() + 4); }
-            else { u.moveTo(r.x + r.w - 18, r.cy() - 3); u.lineTo(r.x + r.w - 12, r.cy() + 4); u.lineTo(r.x + r.w - 6, r.cy() - 3); }
+            if (b.randomOpen) { u.moveTo(cx - 6, cy + 4); u.lineTo(cx, cy - 3); u.lineTo(cx + 6, cy + 4); }
+            else { u.moveTo(cx - 6, cy - 3); u.lineTo(cx, cy + 4); u.lineTo(cx + 6, cy - 3); }
             u.closePath(); u.fillColor(tc); u.fill();
         }
         if (b.hasFill) barButton(u, fillBtn(), "FILL", "hold", b.fill);
@@ -120,6 +129,17 @@ template <class R, class UI> struct Draw {
             u.closePath(); u.fillColor(u.th->btnText); u.fill();
         }
         barButton(u, saveBtn(), "SAVE", nullptr, false);
+    }
+
+    // a die: one-click random for the zone it sits in (sound, sequence, pattern, effect)
+    static void dice(UI& u, const Rc& c, bool hot = false)
+    {
+        const R r = toR(c);
+        u.box(r, hot ? u.th->selFill : u.th->btnFill); u.frame(r, u.th->btnEdge);
+        const float s = std::min(r.w, r.h) - 8.f, x0 = r.cx() - s * 0.5f, y0 = r.cy() - s * 0.5f, p = s / 4.f;
+        const float pr = std::max(1.6f, s * 0.09f);
+        static const float pips[5][2] = {{1, 1}, {3, 1}, {2, 2}, {1, 3}, {3, 3}};
+        for (const auto& q : pips) { u.beginPath(); u.circle(x0 + q[0] * p, y0 + q[1] * p, pr); u.fillColor(hot ? u.th->selText : u.th->btnText); u.fill(); }
     }
 
     // the RANDOM menu (draw it last, over everything)
